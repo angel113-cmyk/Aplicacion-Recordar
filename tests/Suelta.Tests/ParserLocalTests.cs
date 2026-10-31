@@ -42,9 +42,10 @@ public class ParserLocalTests
     [Fact]
     public void Completar_con_la_respuesta_guarda_el_cumpleanos_y_conserva_lo_dicho()
     {
-        var r = ParserLocal.Completar("cumpleaños de Martín", "el 5 de noviembre", Ahora);
+        var r = ParserLocal.Completar(P("cumpleaños de Martín"), "el 5 de noviembre", Ahora);
 
         Assert.True(r.Completo);
+        Assert.Equal("Cumpleaños de Martín", r.Titulo);
         Assert.Equal(new DateTime(2026, 11, 5), r.FechaHora);
         Assert.Equal("cumpleaños de Martín", r.Dijiste);
     }

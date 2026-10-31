@@ -1,3 +1,9 @@
+/* Inter va dentro de la app (sin Google Fonts), así coincide con las imágenes de marca. */
+@font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: swap; src: url("fonts/inter-400.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: swap; src: url("fonts/inter-600.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 700; font-style: normal; font-display: swap; src: url("fonts/inter-700.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 800; font-style: normal; font-display: swap; src: url("fonts/inter-800.woff2") format("woff2"); }
+
 /* Suelta. Colores, tipografía y espacios son variables para cambiarlos en un solo lugar. */
 :root {
     --color-primario: #4f3bf5;
@@ -706,6 +712,274 @@ button:disabled {
     font-weight: 600;
     font-size: 0.9rem;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* ---------- Sprint 2: pestañas, resumen y categorías ---------- */
+
+.pestanas {
+    display: inline-flex;
+    align-self: flex-start;
+    background: var(--color-tarjeta);
+    border-radius: var(--radio-pildora);
+    padding: 4px;
+    box-shadow: var(--sombra-tarjeta);
+    margin-bottom: var(--espacio-2);
+}
+
+.pestana {
+    padding: 8px 16px;
+    border-radius: var(--radio-pildora);
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--color-tinta-suave);
+}
+
+.pestana.activa {
+    background: var(--color-primario);
+    color: #fff;
+}
+
+.pildoras {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: var(--espacio-2);
+}
+
+.pildora {
+    background: var(--color-tarjeta);
+    border-radius: var(--radio-pildora);
+    padding: 5px 12px;
+    font-size: 0.72rem;
+    color: var(--color-tinta-suave);
+    box-shadow: var(--sombra-tarjeta);
+}
+
+.pildora b {
+    color: var(--color-tinta);
+    margin-right: 2px;
+}
+
+.categorias {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: var(--espacio-2);
+}
+
+.chip-cat {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-tarjeta);
+    border: 2px solid transparent;
+    border-radius: var(--radio-pildora);
+    padding: 5px 12px 5px 5px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    box-shadow: var(--sombra-tarjeta);
+}
+
+.chip-cat.seleccionada {
+    border-color: var(--cat);
+}
+
+.chip-cat b {
+    color: var(--color-tinta-suave);
+}
+
+.chip-cat-icono {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 0.7rem;
+}
+
+/* ---------- Sprint 2: tarjeta con círculo, detalle y acciones ---------- */
+
+.tarjeta {
+    align-items: center;
+}
+
+.tarjeta-cuerpo {
+    flex: 1;
+}
+
+.tarjeta.abierta {
+    align-items: flex-start;
+}
+
+.tarjeta.hecha .tarjeta-titulo,
+.tarjeta.hecha .tarjeta-cuando {
+    text-decoration: line-through;
+    opacity: 0.55;
+}
+
+.circulo {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid var(--color-linea);
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+.circulo.marcado {
+    background: var(--color-primario);
+    border-color: var(--color-primario);
+}
+
+.tarjeta-acciones {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.accion {
+    padding: 6px 14px;
+    border-radius: var(--radio-pildora);
+    background: var(--color-primario-suave);
+    color: var(--color-primario);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.accion-peligro {
+    background: #fde8ec;
+    color: var(--color-error);
+}
+
+/* ---------- Sprint 2: opciones al toque y calendario ---------- */
+
+.opciones {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: var(--espacio-1);
+}
+
+.opcion {
+    background: var(--color-tarjeta);
+    border: 2px solid var(--color-primario-suave);
+    border-radius: var(--radio-pildora);
+    padding: 10px 18px;
+    font-weight: 700;
+    color: var(--color-primario);
+}
+
+.boton-calendario {
+    position: relative;
+    display: block;
+    align-self: stretch;
+    margin-top: var(--espacio-1);
+    background: var(--color-tarjeta);
+    border: 1px solid var(--color-linea);
+    border-radius: var(--radio-pildora);
+    padding: 12px 18px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-align: center;
+    overflow: hidden;
+}
+
+/* El selector de fecha del propio Android va encima, invisible, para que el toque lo abra. */
+.boton-calendario input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+}
+
+/* ---------- Sprint 2: ventana de edición, confirmación y deshacer ---------- */
+
+.ventana {
+    position: fixed;
+    left: var(--margen-pantalla);
+    right: var(--margen-pantalla);
+    top: 50%;
+    transform: translateY(-50%);
+    max-width: 440px;
+    max-height: 90vh;
+    overflow-y: auto;
+    margin: 0 auto;
+    z-index: 11;
+    background: var(--color-tarjeta);
+    border-radius: var(--radio-hoja);
+    padding: var(--espacio-3);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ventana-titulo {
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.etiqueta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--color-tinta-suave);
+}
+
+.entrada {
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-tinta);
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--color-linea);
+    background: #fbfbff;
+    width: 100%;
+    min-width: 0;
+}
+
+.fila-doble {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.boton-peligro {
+    border-radius: var(--radio-pildora);
+    padding: 15px 22px;
+    font-weight: 700;
+    background: var(--color-error);
+    color: #fff;
+}
+
+.dialogo-detalle {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--color-tinta-suave);
+    margin-top: -8px;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+}
+
+.toast-accion {
+    flex: none;
+    color: var(--color-acento);
+    font-weight: 800;
+    padding: 4px 8px;
 }
 
 /* ---------- errores de Blazor ---------- */

@@ -1,0 +1,101 @@
+@using System.Globalization
+
+<div class="hoja-fondo" @onclick="OnCancelar"></div>
+<div class="ventana" role="dialog" aria-label="Editar recordatorio">
+    <h2 class="ventana-titulo">Editar recordatorio</h2>
+
+    <label class="etiqueta">
+        Qué
+        <input class="entrada" type="text" @bind="_titulo" @bind:event="oninput" />
+    </label>
+
+    <div class="fila-doble">
+        <label class="etiqueta">
+            Fecha
+            <input class="entrada" type="date" min="@Hoy" value="@_fecha" @onchange="e => _fecha = e.Value?.ToString() ?? string.Empty" />
+        </label>
+        <label class="etiqueta">
+            Hora
+            <input class="entrada" type="time" value="@_hora" @onchange="e => _hora = e.Value?.ToString() ?? string.Empty" />
+        </label>
+    </div>
+
+    <label class="etiqueta">
+        Se repite
+        <select class="entrada" @bind="_repeticion">
+            <option value="@Repeticion.Ninguna">No se repite</option>
+            <option value="@Repeticion.Diaria">Cada día</option>
+            <option value="@Repeticion.Semanal">Cada semana</option>
+            <option value="@Repeticion.Mensual">Cada mes</option>
+            <option value="@Repeticion.Anual">Cada año</option>
+        </select>
+    </label>
+
+    <label class="etiqueta">
+        Categoría
+        <select class="entrada" @bind="_categoria">
+            @foreach (var c in CategoriaInfo.Lista)
+            {
+                <option value="@c.Categoria">@c.Icono @c.Nombre</option>
+            }
+        </select>
+    </label>
+
+    @if (!TituloValido)
+    {
+        <p class="mensaje">El título no puede quedar vacío</p>
+    }
+
+    <div class="hoja-pie">
+        <button type="button" class="boton-secundario" @onclick="OnCancelar">Cancelar</button>
+        <button type="button" class="boton-primario" disabled="@(!TituloValido)" @onclick="GuardarAsync">Guardar cambios</button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Recordatorio Recordatorio { get; set; } = default!;
+    [Parameter] public EventCallback<Recordatorio> OnGuardar { get; set; }
+    [Parameter] public EventCallback OnCancelar { get; set; }
+
+    private string _titulo = "";
+    private string _fecha = "";
+    private string _hora = "";
+    private Repeticion _repeticion;
+    private Categoria _categoria;
+
+    private bool TituloValido => _titulo.Trim().Length > 0;
+
+    // No se ofrecen fechas pasadas en el calendario.
+    private static string Hoy => ZonaLima.Ahora().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    protected override void OnInitialized()
+    {
+        // Se edita una copia: si se cancela, el recordatorio queda como estaba.
+        _titulo = Recordatorio.Titulo;
+        _repeticion = Recordatorio.Repeticion;
+        _categoria = Recordatorio.Categoria;
+
+        if (Recordatorio.FechaHora is { } fh)
+        {
+            _fecha = fh.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            if (!Recordatorio.SinHora)
+                _hora = fh.ToString("HH:mm", CultureInfo.InvariantCulture);
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (!TituloValido) return;
+
+        var hay = DateOnly.TryParseExact(_fecha, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha);
+        var hayHora = TimeOnly.TryParseExact(_hora, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var hora);
+
+        Recordatorio.Titulo = _titulo.Trim();
+        Recordatorio.Categoria = _categoria;
+        Recordatorio.Repeticion = _repeticion;
+        Recordatorio.FechaHora = hay ? fecha.ToDateTime(hayHora ? hora : TimeOnly.MinValue) : null;
+        Recordatorio.SinHora = !(hay && hayHora);
+
+        await OnGuardar.InvokeAsync(Recordatorio);
+    }
+}

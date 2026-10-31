@@ -7,5 +7,9 @@ public static class Iconos
 
     public const string Microfono = Cabecera + "<rect x=\"9\" y=\"3\" width=\"6\" height=\"11\" rx=\"3\"/><path d=\"M5 11a7 7 0 0 0 14 0M12 18v3\"/></svg>";
 
+    public const string Calendario = Cabecera + "<rect x=\"3\" y=\"5\" width=\"18\" height=\"16\" rx=\"3\"/><path d=\"M3 10h18M8 3v4M16 3v4\"/></svg>";
+
+    public const string Visto = Cabecera + "<path d=\"M5 12.5l4.5 4.5L19 7.5\"/></svg>";
+
     public const string Campana = Cabecera + "<path d=\"M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4\"/></svg>";
 }

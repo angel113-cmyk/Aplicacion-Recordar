@@ -15,6 +15,13 @@ public class Recordatorio
     public DateTime? FechaHora { get; set; }
     public bool SinHora { get; set; }
     public Repeticion Repeticion { get; set; } = Repeticion.Ninguna;
+
+    /// <summary>
+    /// El día del mes original ("día 30"). Sirve para que un recordatorio mensual o anual
+    /// no se corra de día después de pasar por un mes corto.
+    /// </summary>
+    public int? AnclaDia { get; set; }
+
     public decimal? Monto { get; set; }
     public string Dijiste { get; set; } = "";
     public bool Hecho { get; set; }

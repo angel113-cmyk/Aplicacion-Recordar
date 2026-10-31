@@ -4,7 +4,7 @@
     var aviso = FormatoFechas.AvisoAnticipado(Recordatorio);
 }
 
-<article class="tarjeta @(_abierta ? "abierta" : "")" @onclick="Alternar">
+<article class="tarjeta @(_abierta ? "abierta" : "") @(Recordatorio.Hecho ? "hecha" : "")" @onclick="Alternar">
     <span class="tarjeta-icono" style="background:@info.Color">@info.Icono</span>
 
     <div class="tarjeta-cuerpo">
@@ -16,16 +16,42 @@
                 <span class="tarjeta-repite" style="color:@info.Color">@repeticion</span>
             }
         </span>
-        @if (_abierta && aviso.Length > 0)
+
+        @if (_abierta)
         {
-            <span class="tarjeta-detalle">@aviso</span>
+            @if (Recordatorio.Dijiste.Length > 0)
+            {
+                <span class="tarjeta-detalle"><b>Dijiste:</b> “@Recordatorio.Dijiste”</span>
+            }
+            @if (aviso.Length > 0)
+            {
+                <span class="tarjeta-detalle">@aviso</span>
+            }
+            <span class="tarjeta-acciones">
+                <button type="button" class="accion" @onclick="() => OnEditar.InvokeAsync(Recordatorio)" @onclick:stopPropagation="true">Editar</button>
+                <button type="button" class="accion accion-peligro" @onclick="() => OnEliminar.InvokeAsync(Recordatorio)" @onclick:stopPropagation="true">Eliminar</button>
+            </span>
         }
     </div>
+
+    <button type="button"
+            class="circulo @(Recordatorio.Hecho ? "marcado" : "")"
+            aria-label="@(Recordatorio.Hecho ? "Devolver a próximos" : "Marcar como hecho")"
+            @onclick="() => OnHecho.InvokeAsync(Recordatorio)"
+            @onclick:stopPropagation="true">
+        @if (Recordatorio.Hecho)
+        {
+            @((MarkupString)Iconos.Visto)
+        }
+    </button>
 </article>
 
 @code {
     [Parameter, EditorRequired] public Recordatorio Recordatorio { get; set; } = default!;
     [Parameter, EditorRequired] public DateTime Ahora { get; set; }
+    [Parameter] public EventCallback<Recordatorio> OnHecho { get; set; }
+    [Parameter] public EventCallback<Recordatorio> OnEditar { get; set; }
+    [Parameter] public EventCallback<Recordatorio> OnEliminar { get; set; }
 
     private bool _abierta;
 

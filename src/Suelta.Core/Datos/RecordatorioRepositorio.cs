@@ -25,6 +25,12 @@ public sealed class RecordatorioRepositorio : IRecordatorioRepositorio
         await _db.InsertAsync(recordatorio);
     }
 
+    public async Task ActualizarAsync(Recordatorio recordatorio)
+    {
+        await IniciarAsync();
+        await _db.UpdateAsync(recordatorio);
+    }
+
     public async Task<List<Recordatorio>> ListarAsync()
     {
         await IniciarAsync();
