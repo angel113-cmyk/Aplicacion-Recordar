@@ -1,0 +1,65 @@
+<button type="button"
+        class="mic @(Escuchando ? "escuchando" : "") @Clase"
+        aria-label="Micrófono: toca para escribir o mantén apretado para hablar"
+        @onpointerdown="AlPresionarAsync"
+        @onpointerup="AlLevantarAsync"
+        @onpointercancel="AlLevantarAsync"
+        @oncontextmenu="Nada"
+        @oncontextmenu:preventDefault="true">
+    <span class="mic-halo"></span>
+    <span class="mic-centro">@((MarkupString)Iconos.Microfono)</span>
+</button>
+
+@code {
+    /// <summary>Tiempo apretado a partir del cual el toque pasa a ser "mantener" (voz).</summary>
+    private const int MsParaMantener = 350;
+
+    [Parameter] public EventCallback OnToque { get; set; }
+    [Parameter] public EventCallback OnMantener { get; set; }
+    [Parameter] public EventCallback OnSoltar { get; set; }
+    [Parameter] public bool Escuchando { get; set; }
+    [Parameter] public string Clase { get; set; } = "";
+
+    private CancellationTokenSource? _espera;
+    private bool _mantenido;
+
+    private async Task AlPresionarAsync(PointerEventArgs e)
+    {
+        _mantenido = false;
+        _espera?.Cancel();
+        var espera = _espera = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(MsParaMantener, espera.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        _mantenido = true;
+        await OnMantener.InvokeAsync();
+    }
+
+    private async Task AlLevantarAsync(PointerEventArgs e)
+    {
+        if (_mantenido)
+        {
+            _mantenido = false;
+            await OnSoltar.InvokeAsync();
+            return;
+        }
+
+        // Toque corto: se cancela la espera antes de que se convierta en "mantener".
+        if (_espera is { IsCancellationRequested: false } espera)
+        {
+            espera.Cancel();
+            await OnToque.InvokeAsync();
+        }
+    }
+
+    private void Nada()
+    {
+    }
+}

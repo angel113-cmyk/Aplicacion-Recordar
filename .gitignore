@@ -1,0 +1,17 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# Android
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Sistema
+Thumbs.db
+.DS_Store
