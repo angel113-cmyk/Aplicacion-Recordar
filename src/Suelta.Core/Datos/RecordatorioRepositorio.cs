@@ -38,6 +38,28 @@ public sealed class RecordatorioRepositorio : IRecordatorioRepositorio
         return r is { EliminadoEn: null } ? r : null;
     }
 
+    public async Task<List<Recordatorio>> ListarCambiosDesdeAsync(DateTime? desdeHoraLima)
+    {
+        await IniciarAsync();
+
+        // Con ">=" un cambio hecho justo en el instante del corte no se pierde; repetirlo no hace daño.
+        return desdeHoraLima is { } desde
+            ? await _db.Table<Recordatorio>().Where(r => r.ActualizadoEn >= desde).ToListAsync()
+            : await _db.Table<Recordatorio>().ToListAsync();
+    }
+
+    public async Task<Recordatorio?> ObtenerConEliminadosAsync(Guid id)
+    {
+        await IniciarAsync();
+        return await _db.FindAsync<Recordatorio>(id);
+    }
+
+    public async Task GuardarRemotoAsync(Recordatorio recordatorio)
+    {
+        await IniciarAsync();
+        await _db.InsertOrReplaceAsync(recordatorio);
+    }
+
     public async Task<List<Recordatorio>> ListarAsync()
     {
         await IniciarAsync();
