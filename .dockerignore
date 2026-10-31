@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/.vs/
+tests/
+.git/
+.claude/
+*.db
+*.db3
+*.keystore
