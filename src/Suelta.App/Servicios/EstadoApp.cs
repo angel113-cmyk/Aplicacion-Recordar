@@ -44,6 +44,13 @@ public sealed class EstadoApp
         set => Preferences.Set(ClaveAvisoAjustesMostrado, value);
     }
 
+    /// <summary>El mensaje sobre las alarmas exactas también se muestra una sola vez.</summary>
+    public bool AvisoAlarmasYaMostrado
+    {
+        get => Preferences.Get("aviso_alarmas_mostrado", false);
+        set => Preferences.Set("aviso_alarmas_mostrado", value);
+    }
+
     private void Ir(Pantalla pantalla)
     {
         Actual = pantalla;

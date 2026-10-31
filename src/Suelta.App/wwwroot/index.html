@@ -23,6 +23,15 @@
         <span class="dismiss">✕</span>
     </div>
 
+    <script>
+        // Lleva la vista hasta la tarjeta del recordatorio cuya notificación se tocó.
+        window.suelta = {
+            verTarjeta: function (id) {
+                var tarjeta = document.getElementById("r-" + id);
+                if (tarjeta) tarjeta.scrollIntoView({ block: "center", behavior: "smooth" });
+            }
+        };
+    </script>
     <script src="_framework/blazor.webview.js" autostart="false"></script>
 
 </body>

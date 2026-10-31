@@ -22,6 +22,12 @@ public class Recordatorio
     /// </summary>
     public int? AnclaDia { get; set; }
 
+    /// <summary>
+    /// Cuándo vuelve a avisar tras tocar "En 1 hora" o "Mañana" (HU-21). Posponer no cambia
+    /// la fecha original del recordatorio, solo el aviso.
+    /// </summary>
+    public DateTime? PospuestoHasta { get; set; }
+
     public decimal? Monto { get; set; }
     public string Dijiste { get; set; } = "";
     public bool Hecho { get; set; }

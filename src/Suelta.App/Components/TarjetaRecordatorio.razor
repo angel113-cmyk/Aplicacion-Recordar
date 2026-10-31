@@ -4,7 +4,7 @@
     var aviso = FormatoFechas.AvisoAnticipado(Recordatorio);
 }
 
-<article class="tarjeta @(_abierta ? "abierta" : "") @(Recordatorio.Hecho ? "hecha" : "")" @onclick="Alternar">
+<article id="r-@Recordatorio.Id" class="tarjeta @(_abierta ? "abierta" : "") @(Recordatorio.Hecho ? "hecha" : "")" @onclick="Alternar">
     <span class="tarjeta-icono" style="background:@info.Color">@info.Icono</span>
 
     <div class="tarjeta-cuerpo">
@@ -53,7 +53,15 @@
     [Parameter] public EventCallback<Recordatorio> OnEditar { get; set; }
     [Parameter] public EventCallback<Recordatorio> OnEliminar { get; set; }
 
+    /// <summary>Se pide abrir la tarjeta, por ejemplo al tocar su notificación (HU-22).</summary>
+    [Parameter] public bool Expandida { get; set; }
+
     private bool _abierta;
+
+    protected override void OnParametersSet()
+    {
+        if (Expandida) _abierta = true;
+    }
 
     private void Alternar() => _abierta = !_abierta;
 }

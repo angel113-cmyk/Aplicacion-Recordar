@@ -4,6 +4,8 @@
 @inject ServicioVoz Voz
 @inject ServicioPermisos PermisosApp
 @inject EstadoApp Estado
+@inject IJSRuntime JS
+@inject RegistroErrores Registro
 
 @if (Pendiente is null)
 {
@@ -67,7 +69,7 @@
                         <h2 class="grupo-titulo">@grupo.Titulo</h2>
                         @foreach (var recordatorio in grupo.Items)
                         {
-                            <TarjetaRecordatorio @key="recordatorio.Id" Recordatorio="recordatorio" Ahora="_ahora"
+                            <TarjetaRecordatorio @key="recordatorio.Id" Recordatorio="recordatorio" Ahora="_ahora" Expandida="@(recordatorio.Id == _abrirId)"
                                                  OnHecho="AlternarHechoAsync" OnEditar="Editar" OnEliminar="PedirEliminar" />
                         }
                     }
@@ -221,6 +223,18 @@ else
     </div>
 }
 
+@if (_avisoAlarmas)
+{
+    <div class="hoja-fondo" @onclick="CerrarAvisoAlarmas"></div>
+    <div class="dialogo" role="alertdialog">
+        <p>Para avisarte justo a la hora, permite las alarmas y recordatorios</p>
+        <div class="hoja-pie">
+            <button type="button" class="boton-secundario" @onclick="CerrarAvisoAlarmas">Ahora no</button>
+            <button type="button" class="boton-primario" @onclick="AbrirAjustesAlarmas">Abrir ajustes</button>
+        </div>
+    </div>
+}
+
 @if (_avisoAjustes)
 {
     <div class="hoja-fondo" @onclick="CerrarAvisoAjustes"></div>
@@ -263,6 +277,9 @@ else
     private bool _escuchando;
     private bool _guardando;
     private bool _avisoAjustes;
+    private bool _avisoAlarmas;
+    private Guid? _abrirId;
+    private Guid? _desplazarA;
     private string _texto = "";
     private string? _mensaje;
     private ElementReference _campo;
@@ -287,7 +304,22 @@ else
     protected override async Task OnInitializedAsync()
     {
         Voz.TextoParcial += AlLlegarTextoParcial;
+        AperturaDesdeAviso.Solicitada += AlSolicitarApertura;
+        NotificadorCambios.RecordatoriosCambiaron += AlCambiarDesdeAfuera;
+
         await RecargarAsync();
+
+        // Al abrir la app los avisos siguen programados aunque se haya reiniciado el teléfono (HU-23).
+        try
+        {
+            await Recordatorios.ReprogramarTodosAsync(ZonaLima.Ahora());
+        }
+        catch (Exception e)
+        {
+            Registro.Error("ReprogramarAlAbrir", e);
+        }
+
+        AbrirRecordatorioPedido();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -297,7 +329,47 @@ else
             _enfocarCampo = false;
             await _campo.FocusAsync();
         }
+
+        if (_desplazarA is { } id)
+        {
+            _desplazarA = null;
+            try
+            {
+                await JS.InvokeVoidAsync("suelta.verTarjeta", id.ToString());
+            }
+            catch (JSException)
+            {
+                // Si la tarjeta no está en pantalla no pasa nada: queda abierta igual.
+            }
+        }
     }
+
+    // ---- notificaciones ----
+
+    // Se tocó una notificación: se muestra la lista completa con esa tarjeta abierta (HU-20, HU-22).
+    private void AbrirRecordatorioPedido()
+    {
+        if (AperturaDesdeAviso.Consumir() is not { } id) return;
+
+        _vista = Vista.Proximos;
+        _filtro = null;
+        _abrirId = id;
+        _desplazarA = id;
+    }
+
+    private void AlSolicitarApertura() => InvokeAsync(async () =>
+    {
+        await RecargarAsync();
+        AbrirRecordatorioPedido();
+        StateHasChanged();
+    });
+
+    // Un botón de la notificación (Hecho, En 1 hora, Mañana) cambió algo mientras la app estaba abierta.
+    private void AlCambiarDesdeAfuera() => InvokeAsync(async () =>
+    {
+        await RecargarAsync();
+        StateHasChanged();
+    });
 
     private async Task RecargarAsync()
     {
@@ -505,6 +577,21 @@ else
 
         await RecargarAsync();
         _ = MostrarToastAsync("Guardado. Ya no tienes que acordarte", conDeshacer: true);
+
+        // Sin el permiso de alarmas exactas Android avisaría "alrededor" de la hora.
+        if (!Estado.AvisoAlarmasYaMostrado && !PermisosApp.AlarmasExactasConcedidas())
+        {
+            Estado.AvisoAlarmasYaMostrado = true;
+            _avisoAlarmas = true;
+        }
+    }
+
+    private void CerrarAvisoAlarmas() => _avisoAlarmas = false;
+
+    private void AbrirAjustesAlarmas()
+    {
+        _avisoAlarmas = false;
+        PermisosApp.PedirAlarmasExactas();
     }
 
     private void CancelarPregunta()
@@ -603,5 +690,10 @@ else
         PermisosApp.AbrirAjustes();
     }
 
-    public void Dispose() => Voz.TextoParcial -= AlLlegarTextoParcial;
+    public void Dispose()
+    {
+        Voz.TextoParcial -= AlLlegarTextoParcial;
+        AperturaDesdeAviso.Solicitada -= AlSolicitarApertura;
+        NotificadorCambios.RecordatoriosCambiaron -= AlCambiarDesdeAfuera;
+    }
 }

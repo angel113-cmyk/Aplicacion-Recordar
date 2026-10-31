@@ -1,3 +1,4 @@
+using Suelta.Core.Avisos;
 using Suelta.Core.Dominio;
 using Suelta.Core.Parser;
 
@@ -10,11 +11,14 @@ public interface IRecordatorioRepositorio
 
     Task ActualizarAsync(Recordatorio recordatorio);
 
+    /// <summary>Un recordatorio por su id, o null si no existe o está eliminado.</summary>
+    Task<Recordatorio?> ObtenerAsync(Guid id);
+
     /// <summary>Todos los recordatorios que no están eliminados.</summary>
     Task<List<Recordatorio>> ListarAsync();
 }
 
-public sealed class ServicioRecordatorios(IRecordatorioRepositorio repositorio)
+public sealed class ServicioRecordatorios(IRecordatorioRepositorio repositorio, IProgramadorAvisos? avisos = null)
 {
     /// <summary>Guarda lo que el parser entendió. Si todavía falta un dato, no guarda nada.</summary>
     public async Task<Recordatorio> GuardarAsync(ResultadoParser resultado, DateTime ahora)
@@ -38,6 +42,7 @@ public sealed class ServicioRecordatorios(IRecordatorioRepositorio repositorio)
         };
 
         await repositorio.InsertarAsync(recordatorio);
+        Reprogramar(recordatorio, ahora);
         return recordatorio;
     }
 
@@ -56,9 +61,11 @@ public sealed class ServicioRecordatorios(IRecordatorioRepositorio repositorio)
 
     public Task<List<Recordatorio>> ListarAsync() => repositorio.ListarAsync();
 
+    public Task<Recordatorio?> ObtenerAsync(Guid id) => repositorio.ObtenerAsync(id);
+
     /// <summary>
     /// Marca como hecho (HU-19). Si se repite, no se marca: pasa a su siguiente fecha y sigue en la
-    /// lista; solo cuenta como hecha la fecha actual.
+    /// lista; solo cuenta como hecha la fecha actual. En ambos casos se cancela el aviso de hoy.
     /// </summary>
     public async Task MarcarHechoAsync(Recordatorio r, DateTime ahora)
     {
@@ -68,8 +75,10 @@ public sealed class ServicioRecordatorios(IRecordatorioRepositorio repositorio)
         else
             r.Hecho = true;
 
+        r.PospuestoHasta = null;
         r.ActualizadoEn = ahora;
         await repositorio.ActualizarAsync(r);
+        Reprogramar(r, ahora);
     }
 
     /// <summary>Un recordatorio que estaba en "Hechos" vuelve a la lista de próximos.</summary>
@@ -78,6 +87,21 @@ public sealed class ServicioRecordatorios(IRecordatorioRepositorio repositorio)
         r.Hecho = false;
         r.ActualizadoEn = ahora;
         await repositorio.ActualizarAsync(r);
+        Reprogramar(r, ahora);
+    }
+
+    /// <summary>"En 1 hora": un nuevo aviso una hora después. La fecha del recordatorio no cambia (HU-21).</summary>
+    public Task PosponerUnaHoraAsync(Recordatorio r, DateTime ahora) => PosponerAsync(r, ahora.AddHours(1), ahora);
+
+    /// <summary>"Mañana": un nuevo aviso mañana a la misma hora (HU-21).</summary>
+    public Task PosponerHastaMananaAsync(Recordatorio r, DateTime ahora) => PosponerAsync(r, ahora.AddDays(1), ahora);
+
+    private async Task PosponerAsync(Recordatorio r, DateTime hasta, DateTime ahora)
+    {
+        r.PospuestoHasta = hasta;
+        r.ActualizadoEn = ahora;
+        await repositorio.ActualizarAsync(r);
+        Reprogramar(r, ahora);
     }
 
     /// <summary>Guarda los cambios de una edición (HU-25). El título no puede quedar vacío.</summary>
@@ -88,8 +112,10 @@ public sealed class ServicioRecordatorios(IRecordatorioRepositorio repositorio)
 
         r.Titulo = r.Titulo.Trim();
         r.AnclaDia = r.FechaHora?.Day;
+        r.PospuestoHasta = null;
         r.ActualizadoEn = ahora;
         await repositorio.ActualizarAsync(r);
+        Reprogramar(r, ahora);
     }
 
     /// <summary>Borrado lógico: sirve para eliminar y también para deshacer justo después de guardar (HU-24).</summary>
@@ -100,6 +126,26 @@ public sealed class ServicioRecordatorios(IRecordatorioRepositorio repositorio)
             r.EliminadoEn = ahora;
             r.ActualizadoEn = ahora;
             await repositorio.ActualizarAsync(r);
+            Reprogramar(r, ahora);
         }
+    }
+
+    /// <summary>
+    /// Vuelve a programar los avisos de todo lo pendiente. Se usa al encender el teléfono y al abrir
+    /// la app (HU-23). Lo que ya pasó mientras tanto no avisa tarde: queda en "Se te pasó".
+    /// </summary>
+    public async Task ReprogramarTodosAsync(DateTime ahora)
+    {
+        foreach (var r in await repositorio.ListarAsync())
+            Reprogramar(r, ahora);
+    }
+
+    private void Reprogramar(Recordatorio r, DateTime ahora)
+    {
+        if (avisos is null) return;
+
+        avisos.Cancelar(r.Id);
+        foreach (var aviso in PlanDeAvisos.Para(r, ahora))
+            avisos.Programar(aviso);
     }
 }

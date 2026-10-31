@@ -6,6 +6,9 @@
     <!-- Solo dos permisos para la persona: micrófono y avisos -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Avisar justo a la hora (Android 12 o superior) y volver a programar al encender el teléfono -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Android 11 o superior: hace falta declarar el servicio de reconocimiento de voz -->
     <queries>
         <intent>
