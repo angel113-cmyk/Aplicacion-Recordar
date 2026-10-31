@@ -1,10 +1,11 @@
+@using System.Globalization
 @implements IDisposable
 @inject ServicioRecordatorios Recordatorios
 @inject ServicioVoz Voz
 @inject ServicioPermisos PermisosApp
 @inject EstadoApp Estado
 
-@if (_pendiente is null)
+@if (Pendiente is null)
 {
     <section class="pantalla principal">
         <header class="cabecera">
@@ -16,7 +17,7 @@
         {
             <div class="vacio"></div>
         }
-        else if (_grupos.Count == 0)
+        else if (_todos.Count == 0)
         {
             <div class="vacio">
                 <h2 class="titulo-grande">Tu cabeza<br />está libre.</h2>
@@ -33,16 +34,70 @@
         }
         else
         {
-            <div class="lista">
-                @foreach (var grupo in _grupos)
+            <nav class="pestanas" role="tablist">
+                <button type="button" role="tab" aria-selected="@(_vista == Vista.Proximos)"
+                        class="pestana @(_vista == Vista.Proximos ? "activa" : "")" @onclick="VerProximos">Próximos</button>
+                <button type="button" role="tab" aria-selected="@(_vista == Vista.PorCategoria)"
+                        class="pestana @(_vista == Vista.PorCategoria ? "activa" : "")" @onclick="VerPorCategoria">Por categoría</button>
+            </nav>
+
+            @if (_vista == Vista.Proximos)
+            {
+                @if (!_resumen.EstaVacio)
                 {
-                    <h2 class="grupo-titulo">@grupo.Titulo</h2>
-                    @foreach (var recordatorio in grupo.Items)
-                    {
-                        <TarjetaRecordatorio @key="recordatorio.Id" Recordatorio="recordatorio" Ahora="_ahora" />
-                    }
+                    <div class="pildoras">
+                        @if (_resumen.Hoy > 0)
+                        {
+                            <span class="pildora"><b>@_resumen.Hoy</b> hoy</span>
+                        }
+                        @if (_resumen.ProximosSieteDias > 0)
+                        {
+                            <span class="pildora"><b>@_resumen.ProximosSieteDias</b> en los próximos 7 días</span>
+                        }
+                        @if (_resumen.SeRepitenSolos > 0)
+                        {
+                            <span class="pildora"><b>@_resumen.SeRepitenSolos</b> se repiten solos</span>
+                        }
+                    </div>
                 }
-            </div>
+
+                <div class="lista">
+                    @foreach (var grupo in _grupos)
+                    {
+                        <h2 class="grupo-titulo">@grupo.Titulo</h2>
+                        @foreach (var recordatorio in grupo.Items)
+                        {
+                            <TarjetaRecordatorio @key="recordatorio.Id" Recordatorio="recordatorio" Ahora="_ahora"
+                                                 OnHecho="AlternarHechoAsync" OnEditar="Editar" OnEliminar="PedirEliminar" />
+                        }
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="categorias">
+                    @foreach (var c in _conteos)
+                    {
+                        <button type="button" class="chip-cat @(_filtro == c.Info.Categoria ? "seleccionada" : "")"
+                                style="--cat:@c.Info.Color" @onclick="() => FiltrarCategoria(c.Info.Categoria)">
+                            <span class="chip-cat-icono" style="background:@c.Info.Color">@c.Info.Icono</span>
+                            @c.Info.Nombre <b>@c.Cantidad</b>
+                        </button>
+                    }
+                </div>
+
+                <div class="lista">
+                    @foreach (var c in _conteos.Where(c => _filtro is null || _filtro == c.Info.Categoria))
+                    {
+                        <h2 class="grupo-titulo" style="color:@c.Info.Color">@c.Info.Icono @c.Info.Nombre @c.Cantidad</h2>
+                        @foreach (var recordatorio in AgrupadorCategorias.Filtrar(_todos, c.Info.Categoria))
+                        {
+                            <TarjetaRecordatorio @key="recordatorio.Id" Recordatorio="recordatorio" Ahora="_ahora"
+                                                 OnHecho="AlternarHechoAsync" OnEditar="Editar" OnEliminar="PedirEliminar" />
+                        }
+                    }
+                </div>
+            }
 
             <div class="mic-flotante">
                 <BotonMicrofono Escuchando="_escuchando"
@@ -54,27 +109,29 @@
 }
 else
 {
+    var pendiente = Pendiente;
+    var info = CategoriaInfo.De(pendiente.Categoria);
+    var repeticion = FormatoFechas.EtiquetaRepeticion(new Recordatorio { Repeticion = pendiente.Repeticion });
+    var faltaDia = pendiente.Faltan.Contains(DatoFaltante.Dia);
+    var primeroFalta = pendiente.Faltan[0];
+
     <section class="pantalla pregunta">
         <p class="logo logo-chico">Suelta<span class="punto">.</span></p>
 
         <p class="rotulo">Dijiste</p>
-        <p class="burbuja">“@_dijiste”</p>
+        <p class="burbuja">“@pendiente.Dijiste”</p>
         <p class="entendi"><span>Entendí esto</span></p>
 
-        @{
-            var info = CategoriaInfo.De(_pendiente.Categoria);
-            var repeticion = _pendiente.Repeticion == Repeticion.Anual ? "Cada año" : FormatoPendienteRepeticion();
-        }
         <div class="tarjeta tarjeta-entendida">
             <span class="tarjeta-icono" style="background:@info.Color">@info.Icono</span>
             <div class="tarjeta-cuerpo">
-                <strong class="tarjeta-titulo">@(_pendiente.Titulo.Length > 0 ? _pendiente.Titulo : "…")</strong>
+                <strong class="tarjeta-titulo">@(pendiente.Titulo.Length > 0 ? pendiente.Titulo : "…")</strong>
                 <span class="chips">
                     @if (repeticion.Length > 0)
                     {
                         <span class="chip chip-dato" style="color:@info.Color">@repeticion</span>
                     }
-                    @if (_pendiente.Faltan.Contains(DatoFaltante.Dia))
+                    @if (faltaDia)
                     {
                         <span class="chip chip-falta">Falta el día</span>
                     }
@@ -82,7 +139,17 @@ else
             </div>
         </div>
 
-        <h2 class="pregunta-texto">@_pendiente.Pregunta</h2>
+        <h2 class="pregunta-texto">@pendiente.Pregunta</h2>
+
+        @if (pendiente.Opciones is { Count: > 0 } && !_modoOtro)
+        {
+            <div class="opciones">
+                @foreach (var opcion in pendiente.Opciones)
+                {
+                    <button type="button" class="opcion" @onclick="() => ElegirOpcionAsync(opcion)">@opcion.Etiqueta</button>
+                }
+            </div>
+        }
 
         <BotonMicrofono Clase="mic-grande" Escuchando="_escuchando"
                         OnToque="AlTocarMicrofonoAsync" OnMantener="AlMantenerMicrofonoAsync" OnSoltar="AlSoltarMicrofonoAsync" />
@@ -91,6 +158,14 @@ else
         @if (_mensaje is not null && !_hojaAbierta)
         {
             <p class="mensaje">@_mensaje</p>
+        }
+
+        @if (primeroFalta == DatoFaltante.Dia)
+        {
+            <label class="boton-calendario">
+                <span>@((MarkupString)Iconos.Calendario) Elegir en el calendario</span>
+                <input type="date" min="@HoyIso" @onchange="AlElegirFechaAsync" />
+            </label>
         }
 
         <button type="button" class="boton-texto" @onclick="CancelarPregunta">Cancelar</button>
@@ -104,7 +179,7 @@ else
         <div class="hoja-cabecera">
             <span class="mic-mini @(_escuchando ? "escuchando" : "")">@((MarkupString)Iconos.Microfono)</span>
             <div class="hoja-textos">
-                <strong>@(_escuchando ? "Te escucho..." : _pendiente is null ? "Escribe tu recordatorio" : _pendiente.Pregunta)</strong>
+                <strong>@(_escuchando ? "Te escucho..." : Pendiente is null ? "Escribe tu recordatorio" : Pendiente.Pregunta)</strong>
                 <small>Dilo como te salga. Aquí puedes usar el micrófono de tu teclado o escribir.</small>
             </div>
             @if (_escuchando)
@@ -128,6 +203,24 @@ else
     </div>
 }
 
+@if (_editando is not null)
+{
+    <EditarRecordatorio Recordatorio="_editando" OnGuardar="GuardarEdicionAsync" OnCancelar="CancelarEdicion" />
+}
+
+@if (_porEliminar is not null)
+{
+    <div class="hoja-fondo" @onclick="CancelarEliminar"></div>
+    <div class="dialogo" role="alertdialog">
+        <p>¿Eliminar este recordatorio?</p>
+        <p class="dialogo-detalle">@_porEliminar.Titulo</p>
+        <div class="hoja-pie">
+            <button type="button" class="boton-secundario" @onclick="CancelarEliminar">Cancelar</button>
+            <button type="button" class="boton-peligro" @onclick="ConfirmarEliminarAsync">Eliminar</button>
+        </div>
+    </div>
+}
+
 @if (_avisoAjustes)
 {
     <div class="hoja-fondo" @onclick="CerrarAvisoAjustes"></div>
@@ -142,15 +235,28 @@ else
 
 @if (_toast is not null)
 {
-    <div class="toast" role="status">@_toast</div>
+    <div class="toast" role="status">
+        <span>@_toast</span>
+        @if (_toastConDeshacer)
+        {
+            <button type="button" class="toast-accion" @onclick="DeshacerAsync">Deshacer</button>
+        }
+    </div>
 }
 
 @code {
+    private enum Vista { Proximos, PorCategoria }
+
     private const string Ejemplo = "El 5 de noviembre es el cumpleaños de Martín";
 
+    private List<Recordatorio> _todos = [];
     private List<GrupoRecordatorios> _grupos = [];
+    private IReadOnlyList<ConteoCategoria> _conteos = [];
+    private ResumenCarga _resumen = new(0, 0, 0);
     private DateTime _ahora = ZonaLima.Ahora();
     private bool _cargado;
+    private Vista _vista = Vista.Proximos;
+    private Categoria? _filtro;
 
     private bool _hojaAbierta;
     private bool _enfocarCampo;
@@ -159,13 +265,24 @@ else
     private bool _avisoAjustes;
     private string _texto = "";
     private string? _mensaje;
-    private string? _toast;
     private ElementReference _campo;
 
-    // Pregunta pendiente (HU-12): se conserva lo dicho al principio y todo lo acumulado.
-    private ResultadoParser? _pendiente;
-    private string _dijiste = "";
-    private string _acumulado = "";
+    private string? _toast;
+    private bool _toastConDeshacer;
+    private int _toastId;
+    private List<Recordatorio> _ultimosGuardados = [];
+
+    private Recordatorio? _editando;
+    private Recordatorio? _porEliminar;
+
+    // Lo que se entendió de la frase: puede ser más de un recordatorio (HU-08). Mientras
+    // a alguno le falte un dato se pregunta, y recién cuando están todos completos se guarda.
+    private List<ResultadoParser> _lote = [];
+    private bool _modoOtro;
+
+    private ResultadoParser? Pendiente => _lote.FirstOrDefault(r => !r.Completo);
+
+    private static string HoyIso => ZonaLima.Ahora().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     protected override async Task OnInitializedAsync()
     {
@@ -185,10 +302,28 @@ else
     private async Task RecargarAsync()
     {
         _ahora = ZonaLima.Ahora();
-        var todos = await Recordatorios.ListarAsync();
-        _grupos = AgrupadorLista.Agrupar(todos, _ahora).ToList();
+        _todos = await Recordatorios.ListarAsync();
+        _grupos = AgrupadorLista.Agrupar(_todos, _ahora).ToList();
+        _conteos = AgrupadorCategorias.Contar(_todos);
+        _resumen = ResumenCarga.De(_todos, _ahora);
+
+        if (_filtro is not null && _conteos.All(c => c.Info.Categoria != _filtro))
+            _filtro = null;
+
         _cargado = true;
     }
+
+    // ---- pestañas y filtros ----
+
+    private void VerProximos()
+    {
+        _vista = Vista.Proximos;
+        _filtro = null;
+    }
+
+    private void VerPorCategoria() => _vista = Vista.PorCategoria;
+
+    private void FiltrarCategoria(Categoria categoria) => _filtro = _filtro == categoria ? null : categoria;
 
     // ---- botón del micrófono ----
 
@@ -218,7 +353,7 @@ else
             return;
         }
 
-        if (_pendiente is null)
+        if (Pendiente is null)
         {
             _texto = "";
             _hojaAbierta = true;
@@ -251,10 +386,11 @@ else
 
         _mensaje = null;
 
-        if (_pendiente is not null)
+        if (Pendiente is not null)
         {
             // Respondiendo la pregunta: con la voz se completa y se guarda de una vez.
-            await ProcesarAsync(Completar(texto));
+            Responder(texto);
+            await ProcesarAsync();
             return;
         }
 
@@ -264,7 +400,7 @@ else
 
     private void AlLlegarTextoParcial(string texto) => InvokeAsync(() =>
     {
-        if (_escuchando && _pendiente is null)
+        if (_escuchando && Pendiente is null)
         {
             _texto = texto;
             StateHasChanged();
@@ -303,19 +439,12 @@ else
         {
             _mensaje = null;
 
-            ResultadoParser resultado;
-            if (_pendiente is null)
-            {
-                resultado = ParserLocal.Interpretar(texto, ZonaLima.Ahora());
-                _dijiste = resultado.Dijiste;
-                _acumulado = texto;
-            }
+            if (_lote.Count == 0)
+                _lote = ParserLocal.InterpretarVarios(texto, ZonaLima.Ahora()).ToList();
             else
-            {
-                resultado = Completar(texto);
-            }
+                Responder(texto);
 
-            await ProcesarAsync(resultado);
+            await ProcesarAsync();
         }
         finally
         {
@@ -323,55 +452,133 @@ else
         }
     }
 
-    private ResultadoParser Completar(string respuesta)
+    // La respuesta completa el recordatorio al que le faltaba un dato.
+    private void Responder(string respuesta)
     {
-        var resultado = ParserLocal.Completar(_acumulado, respuesta, ZonaLima.Ahora()) with { Dijiste = _dijiste };
-        _acumulado = $"{_acumulado} {respuesta}";
-        return resultado;
+        var indice = _lote.FindIndex(r => !r.Completo);
+        if (indice < 0) return;
+
+        _lote[indice] = ParserLocal.Completar(_lote[indice], respuesta, ZonaLima.Ahora());
+        _modoOtro = false;
     }
 
-    private async Task ProcesarAsync(ResultadoParser resultado)
+    private async Task ElegirOpcionAsync(OpcionAclaracion opcion)
     {
-        if (!resultado.Completo)
+        var indice = _lote.FindIndex(r => !r.Completo);
+        if (indice < 0) return;
+
+        if (opcion.EsOtro)
         {
-            // Una sola pregunta corta; el recordatorio todavía no se guarda.
-            _pendiente = resultado;
-            _hojaAbierta = false;
-            _texto = "";
+            // "Otro": se dice o se escribe qué recordar.
+            _modoOtro = true;
             return;
         }
 
-        await Recordatorios.GuardarAsync(resultado, ZonaLima.Ahora());
+        _lote[indice] = ParserLocal.ConOpcion(_lote[indice], opcion, ZonaLima.Ahora());
+        await ProcesarAsync();
+    }
 
-        _pendiente = null;
+    private async Task AlElegirFechaAsync(ChangeEventArgs e)
+    {
+        var indice = _lote.FindIndex(r => !r.Completo);
+        if (indice < 0) return;
+
+        if (!DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha))
+            return;
+
+        _lote[indice] = ParserLocal.ConFecha(_lote[indice], fecha);
+        await ProcesarAsync();
+    }
+
+    private async Task ProcesarAsync()
+    {
         _hojaAbierta = false;
         _texto = "";
         _mensaje = null;
 
+        // Si todavía falta algo, se muestra la pregunta; el recordatorio todavía no se guarda.
+        if (_lote.Count == 0 || Pendiente is not null) return;
+
+        _ultimosGuardados = (await Recordatorios.GuardarVariosAsync(_lote, ZonaLima.Ahora())).ToList();
+        _lote = [];
+        _modoOtro = false;
+
         await RecargarAsync();
-        _ = MostrarToastAsync("Guardado. Ya no tienes que acordarte");
+        _ = MostrarToastAsync("Guardado. Ya no tienes que acordarte", conDeshacer: true);
     }
 
     private void CancelarPregunta()
     {
-        _pendiente = null;
+        _lote = [];
+        _modoOtro = false;
         _texto = "";
         _mensaje = null;
     }
 
-    private string FormatoPendienteRepeticion() => _pendiente?.Repeticion switch
-    {
-        Repeticion.Diaria => "Cada día",
-        Repeticion.Semanal => "Cada semana",
-        Repeticion.Mensual => "Cada mes",
-        _ => "",
-    };
+    // ---- hecho, editar, eliminar y deshacer ----
 
-    private async Task MostrarToastAsync(string mensaje)
+    private async Task AlternarHechoAsync(Recordatorio r)
     {
+        var ahora = ZonaLima.Ahora();
+        if (r.Hecho)
+            await Recordatorios.DesmarcarHechoAsync(r, ahora);
+        else
+            await Recordatorios.MarcarHechoAsync(r, ahora);
+
+        await RecargarAsync();
+    }
+
+    private void Editar(Recordatorio r) => _editando = r;
+
+    private void CancelarEdicion() => _editando = null;
+
+    private async Task GuardarEdicionAsync(Recordatorio r)
+    {
+        await Recordatorios.ActualizarAsync(r, ZonaLima.Ahora());
+        _editando = null;
+
+        await RecargarAsync();
+        _ = MostrarToastAsync("Recordatorio actualizado correctamente");
+    }
+
+    private void PedirEliminar(Recordatorio r) => _porEliminar = r;
+
+    private void CancelarEliminar() => _porEliminar = null;
+
+    private async Task ConfirmarEliminarAsync()
+    {
+        if (_porEliminar is null) return;
+
+        await Recordatorios.EliminarAsync([_porEliminar], ZonaLima.Ahora());
+        _porEliminar = null;
+
+        await RecargarAsync();
+        _ = MostrarToastAsync("Recordatorio eliminado correctamente");
+    }
+
+    /// <summary>Deshacer quita todos los recordatorios que se guardaron juntos (HU-24).</summary>
+    private async Task DeshacerAsync()
+    {
+        _toastId++;
+        _toast = null;
+
+        await Recordatorios.EliminarAsync(_ultimosGuardados, ZonaLima.Ahora());
+        _ultimosGuardados = [];
+
+        await RecargarAsync();
+    }
+
+    private async Task MostrarToastAsync(string mensaje, bool conDeshacer = false)
+    {
+        var id = ++_toastId;
         _toast = mensaje;
+        _toastConDeshacer = conDeshacer;
         await InvokeAsync(StateHasChanged);
-        await Task.Delay(3500);
+
+        await Task.Delay(conDeshacer ? 5000 : 3000);
+
+        // Si apareció otro mensaje mientras tanto, ese se encarga de sí mismo.
+        if (id != _toastId) return;
         _toast = null;
         await InvokeAsync(StateHasChanged);
     }

@@ -60,7 +60,77 @@ public static class ParserLocal
         (Categoria.Citas, new Regex(@"\b(?:cita|reunion|entrevista|junta|clase|examen)\b", Opc)),
     ];
 
-    public static ResultadoParser Interpretar(string frase, DateTime ahora)
+    private static readonly Regex RxClitico = new(@"^(?<v>\p{L}{3,})ale\b\s*(?:(?:un|una|unos|unas)\s+)?(?<resto>.*)$", Opc);
+    private static readonly Regex RxFinDeSemana = new(@"\b(?:los\s+|todos\s+los\s+)?fines?\s+de\s+semana\b", Opc);
+    private static readonly Regex RxSeparador = new(
+        @"\s*(?:(?<!\d)[,;](?!\d)|\s+y\s+(?:luego|despues|ademas)\s+|\s+(?:luego|despues)\s+)\s*", Opc);
+
+    /// <summary>
+    /// Interpreta una frase que puede traer varias cosas ("el 5 es el cumpleaños de Martín, cómprale un
+    /// regalo el 3") y devuelve un recordatorio por cada una, conectados entre sí (HU-08, HU-09).
+    /// </summary>
+    public static IReadOnlyList<ResultadoParser> InterpretarVarios(string frase, DateTime ahora)
+    {
+        var original = (frase ?? "").Trim();
+
+        // "Los fines de semana" se guarda como sábado y domingo.
+        var fin = RxFinDeSemana.Match(Texto.Normalizar(original));
+        if (fin.Success)
+        {
+            var sinFin = (original.Remove(fin.Index, fin.Length) + " ").Trim();
+            return
+            [
+                Interpretar($"{sinFin} cada sábado", ahora) with { Dijiste = original },
+                Interpretar($"{sinFin} cada domingo", ahora) with { Dijiste = original },
+            ];
+        }
+
+        var partes = Dividir(original, ahora);
+        if (partes.Count <= 1)
+            return [Interpretar(original, ahora)];
+
+        var resultados = new List<ResultadoParser>();
+        foreach (var parte in partes)
+        {
+            var persona = resultados.Select(r => r.Persona).LastOrDefault(p => p is not null);
+            var referencia = resultados.Select(r => r.FechaHora).LastOrDefault(f => f is not null);
+            var contexto = new ContextoFrase(persona, referencia is null ? null : DateOnly.FromDateTime(referencia.Value));
+
+            resultados.Add(Interpretar(parte, ahora, contexto) with { Dijiste = original });
+        }
+
+        return resultados;
+    }
+
+    // Parte la frase en trozos, pero un trozo sin acción ("mañana", "a las 5") se pega al vecino.
+    private static List<string> Dividir(string original, DateTime ahora)
+    {
+        var partes = new List<string>();
+        var pendiente = "";
+
+        foreach (var trozo in RxSeparador.Split(original).Select(s => s.Trim()).Where(s => s.Length > 0))
+        {
+            var texto = $"{pendiente} {trozo}".Trim();
+            if (Interpretar(texto, ahora).Titulo.Length > 0)
+            {
+                partes.Add(texto);
+                pendiente = "";
+            }
+            else if (partes.Count > 0)
+            {
+                partes[^1] = $"{partes[^1]} {trozo}";
+            }
+            else
+            {
+                pendiente = texto;
+            }
+        }
+
+        if (pendiente.Length > 0) partes.Add(pendiente);
+        return partes;
+    }
+
+    public static ResultadoParser Interpretar(string frase, DateTime ahora, ContextoFrase? contexto = null)
     {
         var original = (frase ?? "").Trim();
         var t = new Texto(original);
@@ -130,7 +200,14 @@ public static class ParserLocal
             else if ((m = t.Consumir(RxDiaSemana)) is not null)
                 fecha = ProximoDiaSemana(ADayOfWeek(m.Groups["dow"].Value), hoy, hora, TimeOnly.FromDateTime(ahora));
             else if ((m = t.Consumir(RxDiaNumero)) is not null)
-                fecha = ProximoDiaDelMes(int.Parse(m.Groups["d"].Value, CultureInfo.InvariantCulture), hoy);
+            {
+                var dia = int.Parse(m.Groups["d"].Value, CultureInfo.InvariantCulture);
+
+                // "El 3" después de "el 5 de noviembre" es el 3 del mismo mes.
+                fecha = contexto?.Fecha is { } referencia && Valida(referencia.Year, referencia.Month, dia)
+                    ? new DateOnly(referencia.Year, referencia.Month, dia)
+                    : ProximoDiaDelMes(dia, hoy);
+            }
         }
 
         // Lo que la repetición permite deducir cuando no se dijo el día.
@@ -155,8 +232,7 @@ public static class ParserLocal
         else
         {
             titulo = LimpiarTitulo(t.Resto());
-            if (esCumple)
-                titulo = "Cumpleaños";
+            titulo = esCumple ? "Cumpleaños" : AplicarClitico(titulo, contexto?.Persona);
         }
 
         if (esCumple && repeticion == Repeticion.Ninguna)
@@ -178,26 +254,75 @@ public static class ParserLocal
 
         DateTime? fechaHora = fecha is null ? null : fecha.Value.ToDateTime(hora ?? TimeOnly.MinValue);
 
+        var opciones = faltan.Contains(DatoFaltante.Accion) && titulo.Length > 0 ? Aclaraciones.Para(titulo) : null;
+
         return new ResultadoParser(
+            original,
             original,
             titulo,
             fechaHora,
+            hora,
             hora is null,
             repeticion,
             monto,
             categoria,
             faltan,
-            ConstruirPregunta(faltan, titulo, nombreCumple));
+            ConstruirPregunta(faltan, titulo, nombreCumple),
+            nombreCumple,
+            opciones);
     }
 
     /// <summary>
-    /// Completa una frase a la que le faltaba un dato: junta la frase base con la respuesta
-    /// y la interpreta de nuevo, pero conserva lo que la persona dijo al principio.
+    /// Completa un recordatorio al que le faltaba un dato: junta lo que ya se entendió con la
+    /// respuesta y lo interpreta de nuevo, pero conserva lo que la persona dijo al principio.
     /// </summary>
-    public static ResultadoParser Completar(string fraseBase, string respuesta, DateTime ahora)
+    public static ResultadoParser Completar(ResultadoParser previo, string respuesta, DateTime ahora, ContextoFrase? contexto = null)
     {
-        var r = Interpretar($"{fraseBase} {respuesta}", ahora);
-        return r with { Dijiste = fraseBase.Trim() };
+        string texto;
+        if (!previo.Faltan.Contains(DatoFaltante.Accion))
+            texto = $"{previo.Fuente} {respuesta}";
+        else if (previo.Titulo.Length > 0)
+            texto = respuesta; // era una palabra suelta: la respuesta dice qué recordar
+        else
+            texto = $"{respuesta} {previo.Fuente}"; // solo se había dicho la fecha
+
+        return Interpretar(texto, ahora, contexto) with { Dijiste = previo.Dijiste };
+    }
+
+    /// <summary>Arma el recordatorio con la opción que se eligió al toque ("Vacuna"). Todavía falta el día.</summary>
+    public static ResultadoParser ConOpcion(ResultadoParser previo, OpcionAclaracion opcion, DateTime ahora)
+    {
+        if (opcion.EsOtro) return previo;
+        return Interpretar(opcion.Titulo, ahora) with { Dijiste = previo.Dijiste };
+    }
+
+    /// <summary>Completa el día con una fecha elegida en el calendario (HU-14). Conserva la hora si se dijo.</summary>
+    public static ResultadoParser ConFecha(ResultadoParser previo, DateOnly fecha)
+    {
+        var faltan = previo.Faltan.Where(f => f != DatoFaltante.Dia).ToList();
+        return previo with
+        {
+            FechaHora = fecha.ToDateTime(previo.Hora ?? TimeOnly.MinValue),
+            Faltan = faltan,
+            Pregunta = faltan.Count == 0 ? null : previo.Pregunta,
+        };
+    }
+
+    // "Cómprale un regalo" -> "Comprar regalo para Martín".
+    private static string AplicarClitico(string titulo, string? persona)
+    {
+        if (titulo.Length == 0) return titulo;
+
+        var m = RxClitico.Match(Texto.Normalizar(titulo));
+        if (!m.Success) return titulo;
+
+        var verbo = m.Groups["v"].Value + "ar";
+        var resto = titulo[m.Groups["resto"].Index..].Trim();
+
+        var armado = char.ToUpperInvariant(verbo[0]) + verbo[1..];
+        if (resto.Length > 0) armado += " " + resto;
+        if (persona is not null) armado += " para " + persona;
+        return armado;
     }
 
     private static string? ConstruirPregunta(List<DatoFaltante> faltan, string titulo, string? nombreCumple)
