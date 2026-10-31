@@ -1,0 +1,33 @@
+@{
+    var info = CategoriaInfo.De(Recordatorio.Categoria);
+    var repeticion = FormatoFechas.EtiquetaRepeticion(Recordatorio);
+    var aviso = FormatoFechas.AvisoAnticipado(Recordatorio);
+}
+
+<article class="tarjeta @(_abierta ? "abierta" : "")" @onclick="Alternar">
+    <span class="tarjeta-icono" style="background:@info.Color">@info.Icono</span>
+
+    <div class="tarjeta-cuerpo">
+        <strong class="tarjeta-titulo">@Recordatorio.Titulo</strong>
+        <span class="tarjeta-cuando">
+            @FormatoFechas.Cuando(Recordatorio, Ahora)
+            @if (repeticion.Length > 0)
+            {
+                <span class="tarjeta-repite" style="color:@info.Color">@repeticion</span>
+            }
+        </span>
+        @if (_abierta && aviso.Length > 0)
+        {
+            <span class="tarjeta-detalle">@aviso</span>
+        }
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public Recordatorio Recordatorio { get; set; } = default!;
+    [Parameter, EditorRequired] public DateTime Ahora { get; set; }
+
+    private bool _abierta;
+
+    private void Alternar() => _abierta = !_abierta;
+}

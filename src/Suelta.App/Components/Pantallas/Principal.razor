@@ -1,0 +1,400 @@
+@implements IDisposable
+@inject ServicioRecordatorios Recordatorios
+@inject ServicioVoz Voz
+@inject ServicioPermisos PermisosApp
+@inject EstadoApp Estado
+
+@if (_pendiente is null)
+{
+    <section class="pantalla principal">
+        <header class="cabecera">
+            <h1 class="logo logo-chico">Suelta<span class="punto">.</span></h1>
+            <span class="fecha">@FormatoFechas.Cabecera(_ahora)</span>
+        </header>
+
+        @if (!_cargado)
+        {
+            <div class="vacio"></div>
+        }
+        else if (_grupos.Count == 0)
+        {
+            <div class="vacio">
+                <h2 class="titulo-grande">Tu cabeza<br />está libre.</h2>
+
+                <BotonMicrofono Clase="mic-grande" Escuchando="_escuchando"
+                                OnToque="AlTocarMicrofonoAsync" OnMantener="AlMantenerMicrofonoAsync" OnSoltar="AlSoltarMicrofonoAsync" />
+                <p class="ayuda-mic">Mantén apretado y habla</p>
+
+                <button type="button" class="ejemplo" @onclick="ProbarEjemplo">
+                    <span class="ejemplo-rotulo">Prueba diciendo</span>
+                    <span class="ejemplo-frase">“@Ejemplo”</span>
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="lista">
+                @foreach (var grupo in _grupos)
+                {
+                    <h2 class="grupo-titulo">@grupo.Titulo</h2>
+                    @foreach (var recordatorio in grupo.Items)
+                    {
+                        <TarjetaRecordatorio @key="recordatorio.Id" Recordatorio="recordatorio" Ahora="_ahora" />
+                    }
+                }
+            </div>
+
+            <div class="mic-flotante">
+                <BotonMicrofono Escuchando="_escuchando"
+                                OnToque="AlTocarMicrofonoAsync" OnMantener="AlMantenerMicrofonoAsync" OnSoltar="AlSoltarMicrofonoAsync" />
+                <p class="ayuda-mic">Mantén apretado y habla</p>
+            </div>
+        }
+    </section>
+}
+else
+{
+    <section class="pantalla pregunta">
+        <p class="logo logo-chico">Suelta<span class="punto">.</span></p>
+
+        <p class="rotulo">Dijiste</p>
+        <p class="burbuja">“@_dijiste”</p>
+        <p class="entendi"><span>Entendí esto</span></p>
+
+        @{
+            var info = CategoriaInfo.De(_pendiente.Categoria);
+            var repeticion = _pendiente.Repeticion == Repeticion.Anual ? "Cada año" : FormatoPendienteRepeticion();
+        }
+        <div class="tarjeta tarjeta-entendida">
+            <span class="tarjeta-icono" style="background:@info.Color">@info.Icono</span>
+            <div class="tarjeta-cuerpo">
+                <strong class="tarjeta-titulo">@(_pendiente.Titulo.Length > 0 ? _pendiente.Titulo : "…")</strong>
+                <span class="chips">
+                    @if (repeticion.Length > 0)
+                    {
+                        <span class="chip chip-dato" style="color:@info.Color">@repeticion</span>
+                    }
+                    @if (_pendiente.Faltan.Contains(DatoFaltante.Dia))
+                    {
+                        <span class="chip chip-falta">Falta el día</span>
+                    }
+                </span>
+            </div>
+        </div>
+
+        <h2 class="pregunta-texto">@_pendiente.Pregunta</h2>
+
+        <BotonMicrofono Clase="mic-grande" Escuchando="_escuchando"
+                        OnToque="AlTocarMicrofonoAsync" OnMantener="AlMantenerMicrofonoAsync" OnSoltar="AlSoltarMicrofonoAsync" />
+        <p class="ayuda-mic">@(_escuchando ? "Te escucho..." : "Dilo con tu voz")</p>
+
+        @if (_mensaje is not null && !_hojaAbierta)
+        {
+            <p class="mensaje">@_mensaje</p>
+        }
+
+        <button type="button" class="boton-texto" @onclick="CancelarPregunta">Cancelar</button>
+    </section>
+}
+
+@if (_hojaAbierta)
+{
+    <div class="hoja-fondo" @onclick="CerrarHoja"></div>
+    <div class="hoja" role="dialog" aria-label="Crear recordatorio">
+        <div class="hoja-cabecera">
+            <span class="mic-mini @(_escuchando ? "escuchando" : "")">@((MarkupString)Iconos.Microfono)</span>
+            <div class="hoja-textos">
+                <strong>@(_escuchando ? "Te escucho..." : _pendiente is null ? "Escribe tu recordatorio" : _pendiente.Pregunta)</strong>
+                <small>Dilo como te salga. Aquí puedes usar el micrófono de tu teclado o escribir.</small>
+            </div>
+            @if (_escuchando)
+            {
+                <span class="onda" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+            }
+        </div>
+
+        <textarea @ref="_campo" class="campo" rows="3" placeholder="Ej: mañana pagar el recibo a las 5"
+                  @bind="_texto" @bind:event="oninput"></textarea>
+
+        @if (_mensaje is not null)
+        {
+            <p class="mensaje">@_mensaje</p>
+        }
+
+        <div class="hoja-pie">
+            <button type="button" class="boton-secundario" @onclick="CerrarHoja">Cancelar</button>
+            <button type="button" class="boton-primario" disabled="@(_texto.Trim().Length == 0 || _guardando)" @onclick="GuardarDesdeHojaAsync">Guardar</button>
+        </div>
+    </div>
+}
+
+@if (_avisoAjustes)
+{
+    <div class="hoja-fondo" @onclick="CerrarAvisoAjustes"></div>
+    <div class="dialogo" role="alertdialog">
+        <p>Activa los avisos para que Suelta te recuerde</p>
+        <div class="hoja-pie">
+            <button type="button" class="boton-secundario" @onclick="CerrarAvisoAjustes">Ahora no</button>
+            <button type="button" class="boton-primario" @onclick="AbrirAjustes">Abrir ajustes</button>
+        </div>
+    </div>
+}
+
+@if (_toast is not null)
+{
+    <div class="toast" role="status">@_toast</div>
+}
+
+@code {
+    private const string Ejemplo = "El 5 de noviembre es el cumpleaños de Martín";
+
+    private List<GrupoRecordatorios> _grupos = [];
+    private DateTime _ahora = ZonaLima.Ahora();
+    private bool _cargado;
+
+    private bool _hojaAbierta;
+    private bool _enfocarCampo;
+    private bool _escuchando;
+    private bool _guardando;
+    private bool _avisoAjustes;
+    private string _texto = "";
+    private string? _mensaje;
+    private string? _toast;
+    private ElementReference _campo;
+
+    // Pregunta pendiente (HU-12): se conserva lo dicho al principio y todo lo acumulado.
+    private ResultadoParser? _pendiente;
+    private string _dijiste = "";
+    private string _acumulado = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Voz.TextoParcial += AlLlegarTextoParcial;
+        await RecargarAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_enfocarCampo && _hojaAbierta)
+        {
+            _enfocarCampo = false;
+            await _campo.FocusAsync();
+        }
+    }
+
+    private async Task RecargarAsync()
+    {
+        _ahora = ZonaLima.Ahora();
+        var todos = await Recordatorios.ListarAsync();
+        _grupos = AgrupadorLista.Agrupar(todos, _ahora).ToList();
+        _cargado = true;
+    }
+
+    // ---- botón del micrófono ----
+
+    /// <summary>Toque corto: se abre la hoja con el campo de texto y el teclado (HU-06).</summary>
+    private async Task AlTocarMicrofonoAsync()
+    {
+        if (await MostrarAvisoAjustesSiCorrespondeAsync()) return;
+
+        _mensaje = null;
+        _texto = "";
+        AbrirHojaParaEscribir();
+    }
+
+    /// <summary>Mantener apretado: se escucha mientras dure (HU-04).</summary>
+    private async Task AlMantenerMicrofonoAsync()
+    {
+        if (await MostrarAvisoAjustesSiCorrespondeAsync()) return;
+
+        _mensaje = null;
+
+        if (!await PermisosApp.MicrofonoConcedidoAsync())
+        {
+            // Sin permiso del micrófono se puede escribir la frase.
+            _texto = "";
+            _mensaje = "Sin el micrófono, escribe tu frase.";
+            AbrirHojaParaEscribir();
+            return;
+        }
+
+        if (_pendiente is null)
+        {
+            _texto = "";
+            _hojaAbierta = true;
+        }
+
+        _escuchando = true;
+        StateHasChanged();
+
+        if (!await Voz.IniciarAsync())
+        {
+            _escuchando = false;
+            _mensaje = "No pude escuchar. Escribe tu frase.";
+            AbrirHojaParaEscribir();
+        }
+    }
+
+    private async Task AlSoltarMicrofonoAsync()
+    {
+        if (!_escuchando) return;
+
+        var texto = await Voz.DetenerAsync();
+        _escuchando = false;
+
+        if (texto.Length == 0)
+        {
+            _texto = "";
+            _mensaje = "No te escuché, intenta otra vez";
+            return;
+        }
+
+        _mensaje = null;
+
+        if (_pendiente is not null)
+        {
+            // Respondiendo la pregunta: con la voz se completa y se guarda de una vez.
+            await ProcesarAsync(Completar(texto));
+            return;
+        }
+
+        // Frase nueva: aparece escrita para revisarla y corregirla antes de guardar (HU-05).
+        _texto = texto;
+    }
+
+    private void AlLlegarTextoParcial(string texto) => InvokeAsync(() =>
+    {
+        if (_escuchando && _pendiente is null)
+        {
+            _texto = texto;
+            StateHasChanged();
+        }
+    });
+
+    private void AbrirHojaParaEscribir()
+    {
+        _hojaAbierta = true;
+        _enfocarCampo = true;
+    }
+
+    private void ProbarEjemplo()
+    {
+        _mensaje = null;
+        _texto = Ejemplo;
+        _hojaAbierta = true;
+    }
+
+    private void CerrarHoja()
+    {
+        _hojaAbierta = false;
+        _texto = "";
+        _mensaje = null;
+    }
+
+    // ---- guardar y preguntar ----
+
+    private async Task GuardarDesdeHojaAsync()
+    {
+        var texto = _texto.Trim();
+        if (texto.Length == 0 || _guardando) return;
+
+        _guardando = true;
+        try
+        {
+            _mensaje = null;
+
+            ResultadoParser resultado;
+            if (_pendiente is null)
+            {
+                resultado = ParserLocal.Interpretar(texto, ZonaLima.Ahora());
+                _dijiste = resultado.Dijiste;
+                _acumulado = texto;
+            }
+            else
+            {
+                resultado = Completar(texto);
+            }
+
+            await ProcesarAsync(resultado);
+        }
+        finally
+        {
+            _guardando = false;
+        }
+    }
+
+    private ResultadoParser Completar(string respuesta)
+    {
+        var resultado = ParserLocal.Completar(_acumulado, respuesta, ZonaLima.Ahora()) with { Dijiste = _dijiste };
+        _acumulado = $"{_acumulado} {respuesta}";
+        return resultado;
+    }
+
+    private async Task ProcesarAsync(ResultadoParser resultado)
+    {
+        if (!resultado.Completo)
+        {
+            // Una sola pregunta corta; el recordatorio todavía no se guarda.
+            _pendiente = resultado;
+            _hojaAbierta = false;
+            _texto = "";
+            return;
+        }
+
+        await Recordatorios.GuardarAsync(resultado, ZonaLima.Ahora());
+
+        _pendiente = null;
+        _hojaAbierta = false;
+        _texto = "";
+        _mensaje = null;
+
+        await RecargarAsync();
+        _ = MostrarToastAsync("Guardado. Ya no tienes que acordarte");
+    }
+
+    private void CancelarPregunta()
+    {
+        _pendiente = null;
+        _texto = "";
+        _mensaje = null;
+    }
+
+    private string FormatoPendienteRepeticion() => _pendiente?.Repeticion switch
+    {
+        Repeticion.Diaria => "Cada día",
+        Repeticion.Semanal => "Cada semana",
+        Repeticion.Mensual => "Cada mes",
+        _ => "",
+    };
+
+    private async Task MostrarToastAsync(string mensaje)
+    {
+        _toast = mensaje;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(3500);
+        _toast = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ---- aviso de notificaciones (HU-02) ----
+
+    /// <summary>Si faltan los avisos, la primera vez que se toca el micrófono se explica por qué activarlos.</summary>
+    private async Task<bool> MostrarAvisoAjustesSiCorrespondeAsync()
+    {
+        if (Estado.AvisoAjustesYaMostrado || await PermisosApp.AvisosConcedidosAsync()) return false;
+
+        Estado.AvisoAjustesYaMostrado = true;
+        _avisoAjustes = true;
+        return true;
+    }
+
+    private void CerrarAvisoAjustes() => _avisoAjustes = false;
+
+    private void AbrirAjustes()
+    {
+        _avisoAjustes = false;
+        PermisosApp.AbrirAjustes();
+    }
+
+    public void Dispose() => Voz.TextoParcial -= AlLlegarTextoParcial;
+}

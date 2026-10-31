@@ -1,0 +1,22 @@
+@inject EstadoApp Estado
+
+<section class="pantalla bienvenida">
+    <div class="bienvenida-circulo"></div>
+    <div class="bienvenida-circulo-pie"></div>
+
+    <header>
+        <h1 class="logo">Suelta<span class="punto">.</span></h1>
+        <p class="promesa">Tú lo dices,<br />ella se acuerda.</p>
+    </header>
+
+    <div class="bienvenida-fichas" aria-hidden="true">
+        <div class="ficha ficha-1"><span class="ficha-icono" style="background:@CategoriaInfo.De(Categoria.Cumpleanos).Color">🎂</span>cumple de Martín</div>
+        <div class="ficha ficha-2"><span class="ficha-icono" style="background:@CategoriaInfo.De(Categoria.Compras).Color">🛒</span>mercado los sábados</div>
+        <div class="ficha ficha-3"><span class="ficha-icono" style="background:@CategoriaInfo.De(Categoria.Pagos).Color">💳</span>pagar la luz</div>
+    </div>
+
+    <footer class="bienvenida-pie">
+        <button type="button" class="boton-claro" @onclick="Estado.IrAPermisos">Empezar</button>
+        <small>Sin cuentas ni formularios</small>
+    </footer>
+</section>

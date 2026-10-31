@@ -1,0 +1,24 @@
+﻿@page "/"
+@implements IDisposable
+@inject EstadoApp Estado
+
+@switch (Estado.Actual)
+{
+    case Pantalla.Bienvenida:
+        <Bienvenida />
+        break;
+    case Pantalla.Permisos:
+        <Permisos />
+        break;
+    default:
+        <Principal />
+        break;
+}
+
+@code {
+    protected override void OnInitialized() => Estado.Cambio += AlCambiar;
+
+    private void AlCambiar() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Estado.Cambio -= AlCambiar;
+}

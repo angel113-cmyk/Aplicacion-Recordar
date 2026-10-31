@@ -1,0 +1,49 @@
+@inject EstadoApp Estado
+@inject ServicioPermisos Servicio
+
+<section class="pantalla permisos">
+    <p class="logo logo-chico">Suelta<span class="punto">.</span></p>
+
+    <h1 class="titulo-grande">Dos permisos<br />y listo.</h1>
+    <p class="subtitulo">Solo para que Suelta pueda escucharte y avisarte.</p>
+
+    <div class="tarjeta-permiso">
+        <span class="permiso-icono permiso-mic">@((MarkupString)Iconos.Microfono)</span>
+        <div>
+            <strong>Para escucharte</strong>
+            <p>Solo mientras mantienes apretado el botón.</p>
+        </div>
+    </div>
+
+    <div class="tarjeta-permiso">
+        <span class="permiso-icono permiso-aviso">@((MarkupString)Iconos.Campana)</span>
+        <div>
+            <strong>Para avisarte</strong>
+            <p>Te recuerda justo cuando toca.</p>
+        </div>
+    </div>
+
+    <div class="permisos-pie">
+        <button type="button" class="boton-primario" disabled="@_pidiendo" @onclick="PermitirAsync">Permitir</button>
+        <button type="button" class="boton-texto" disabled="@_pidiendo" @onclick="Estado.IrAPrincipal">Ahora no</button>
+    </div>
+</section>
+
+@code {
+    private bool _pidiendo;
+
+    private async Task PermitirAsync()
+    {
+        _pidiendo = true;
+        try
+        {
+            await Servicio.PedirAsync();
+        }
+        finally
+        {
+            _pidiendo = false;
+        }
+
+        Estado.IrAPrincipal();
+    }
+}
