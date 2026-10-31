@@ -1,0 +1,62 @@
+name: CI
+
+# En cada cambio: compila, corre las pruebas y publica el APK como artefacto (HT-16).
+on:
+  push:
+  pull_request:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Correr las pruebas
+        run: dotnet test tests/Suelta.Tests -c Release
+
+  apk:
+    needs: pruebas
+    runs-on: ubuntu-latest
+    env:
+      # Opcionales: si no existen, el APK sale con la firma de depuración (sirve para instalar y probar).
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Instalar la carga de trabajo de Android
+        run: dotnet workload install maui-android
+
+      - name: Preparar el keystore (solo si hay secretos)
+        if: env.KEYSTORE_BASE64 != ''
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/suelta.keystore"
+
+      - name: Publicar el APK
+        run: |
+          ARGS=(-f net10.0-android -c Release -p:AndroidPackageFormat=apk "-p:ApplicationVersion=${{ github.run_number }}")
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            ARGS+=(-p:AndroidKeyStore=true "-p:AndroidSigningKeyStore=$RUNNER_TEMP/suelta.keystore"
+                   "-p:AndroidSigningKeyAlias=$KEYSTORE_ALIAS"
+                   -p:AndroidSigningStorePass=env:KEYSTORE_PASSWORD -p:AndroidSigningKeyPass=env:KEY_PASSWORD)
+          fi
+          dotnet publish src/Suelta.App "${ARGS[@]}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Suelta-apk
+          path: src/Suelta.App/bin/Release/net10.0-android/publish/*-Signed.apk

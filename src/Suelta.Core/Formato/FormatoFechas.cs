@@ -51,6 +51,10 @@ public static class FormatoFechas
     public static string Cabecera(DateTime ahora) =>
         $"{DiasLargos[(int)ahora.DayOfWeek]} {ahora.Day} de {MesesLargos[ahora.Month - 1]}";
 
+    /// <summary>"jueves 5 de noviembre".</summary>
+    public static string FechaLarga(DateTime fecha) =>
+        $"{DiasLargos[(int)fecha.DayOfWeek].ToLowerInvariant()} {fecha.Day} de {MesesLargos[fecha.Month - 1]}";
+
     /// <summary>"Te aviso 3 días antes"; vacío si el recordatorio no avisa antes.</summary>
     public static string AvisoAnticipado(Recordatorio r) =>
         r.DiasAvisoAnticipado > 0 ? $"Te aviso {r.DiasAvisoAnticipado} días antes" : "";

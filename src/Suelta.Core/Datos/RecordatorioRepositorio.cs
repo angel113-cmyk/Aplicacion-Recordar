@@ -31,6 +31,13 @@ public sealed class RecordatorioRepositorio : IRecordatorioRepositorio
         await _db.UpdateAsync(recordatorio);
     }
 
+    public async Task<Recordatorio?> ObtenerAsync(Guid id)
+    {
+        await IniciarAsync();
+        var r = await _db.FindAsync<Recordatorio>(id);
+        return r is { EliminadoEn: null } ? r : null;
+    }
+
     public async Task<List<Recordatorio>> ListarAsync()
     {
         await IniciarAsync();
