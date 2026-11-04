@@ -982,6 +982,119 @@ button:disabled {
     padding: 4px 8px;
 }
 
+/* ---------- Sprint 4: ajustes y respaldo ---------- */
+
+.cabecera .fecha {
+    margin-left: auto;
+    margin-right: 8px;
+}
+
+.boton-icono {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 1.2rem;
+    color: var(--color-tinta-suave);
+    background: var(--color-tarjeta);
+    box-shadow: var(--sombra-tarjeta);
+}
+
+.ajustes-cabecera {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: var(--espacio-2);
+}
+
+.ajustes-cabecera .boton-texto {
+    padding: 8px 12px 8px 0;
+}
+
+.titulo-medio {
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+
+.ajustes-cuerpo {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--espacio-2);
+    padding-bottom: var(--espacio-3);
+}
+
+.bloque {
+    background: var(--color-tarjeta);
+    border-radius: var(--radio-tarjeta);
+    padding: var(--espacio-2);
+    box-shadow: var(--sombra-tarjeta);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.bloque-titulo {
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.bloque-texto {
+    font-size: 0.88rem;
+    color: var(--color-tinta-suave);
+}
+
+.bloque-aviso {
+    color: var(--color-error);
+    font-weight: 600;
+}
+
+.codigo {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-align: center;
+    background: var(--color-primario-suave);
+    color: var(--color-primario);
+    border-radius: 12px;
+    padding: 14px 8px;
+    user-select: all;
+    -webkit-user-select: all;
+}
+
+.entrada-codigo {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.boton-peligro-suave {
+    border-radius: var(--radio-pildora);
+    padding: 15px 22px;
+    font-weight: 700;
+    background: #fde8ec;
+    color: var(--color-error);
+}
+
+.mensaje-ok {
+    color: var(--color-primario);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.lista-privacidad {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--color-tinta-suave);
+}
+
 /* ---------- errores de Blazor ---------- */
 
 #blazor-error-ui {

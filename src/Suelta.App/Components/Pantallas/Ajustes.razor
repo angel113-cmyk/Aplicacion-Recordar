@@ -1,0 +1,239 @@
+@using Suelta.Core.Respaldo
+@inject ServicioRespaldo Respaldo
+@inject ConfiguracionServidor Servidor
+
+<section class="pantalla ajustes">
+    <header class="ajustes-cabecera">
+        <button type="button" class="boton-texto" @onclick="OnCerrar">‹ Volver</button>
+        <h1 class="titulo-medio">Ajustes</h1>
+    </header>
+
+    <div class="ajustes-cuerpo">
+        <section class="bloque">
+            <h2 class="bloque-titulo">Respaldo</h2>
+
+            @if (!Respaldo.Activo)
+            {
+                <p class="bloque-texto">
+                    Es opcional y está desactivado. Si lo activas, tus recordatorios se guardan también en el servidor
+                    para que puedas recuperarlos si cambias de teléfono. No pide correo ni contraseña: solo un código.
+                </p>
+
+                @if (!_recuperando)
+                {
+                    <button type="button" class="boton-primario" disabled="@_ocupado" @onclick="ActivarAsync">Activar respaldo</button>
+                    <button type="button" class="boton-secundario" disabled="@_ocupado" @onclick="EmpezarRecuperar">Recuperar mis recordatorios</button>
+                }
+                else
+                {
+                    <label class="etiqueta">
+                        Tu código de recuperación
+                        <input class="entrada entrada-codigo" type="text" autocapitalize="characters" autocomplete="off" spellcheck="false"
+                               placeholder="XXXX-XXXX-XXXX-XXXX" @bind="_codigoEscrito" @bind:event="oninput" />
+                    </label>
+                    <button type="button" class="boton-primario" disabled="@(_ocupado || _codigoEscrito.Trim().Length == 0)" @onclick="RecuperarAsync">Recuperar</button>
+                    <button type="button" class="boton-texto" disabled="@_ocupado" @onclick="CancelarRecuperar">Cancelar</button>
+                }
+            }
+            else
+            {
+                <p class="bloque-texto">El respaldo está activo. Este es tu código de recuperación:</p>
+                <p class="codigo">@Respaldo.CodigoFormateado</p>
+                <p class="bloque-texto bloque-aviso">
+                    Guárdalo en un lugar seguro. Sin este código no se pueden recuperar tus recordatorios,
+                    y cualquiera que lo tenga podría verlos.
+                </p>
+
+                <button type="button" class="boton-secundario" disabled="@_ocupado" @onclick="SincronizarAsync">Sincronizar ahora</button>
+                <button type="button" class="boton-peligro-suave" disabled="@_ocupado" @onclick="PedirBorrar">Borrar mis datos</button>
+            }
+
+            @if (_mensaje is not null)
+            {
+                <p class="@(_mensajeEsError ? "mensaje" : "mensaje-ok")">@_mensaje</p>
+            }
+        </section>
+
+        <section class="bloque">
+            <h2 class="bloque-titulo">Servidor</h2>
+            <p class="bloque-texto">La dirección del servidor de respaldo. Solo hace falta si vas a usar el respaldo.</p>
+            <label class="etiqueta">
+                Dirección
+                <input class="entrada" type="url" autocapitalize="none" autocomplete="off" spellcheck="false"
+                       placeholder="https://..." @bind="_direccion" @bind:event="oninput" />
+            </label>
+            <button type="button" class="boton-secundario" @onclick="GuardarDireccion">Guardar dirección</button>
+            @if (_mensajeServidor is not null)
+            {
+                <p class="@(_mensajeServidorEsError ? "mensaje" : "mensaje-ok")">@_mensajeServidor</p>
+            }
+        </section>
+
+        <section class="bloque">
+            <h2 class="bloque-titulo">Privacidad</h2>
+            <ul class="lista-privacidad">
+                <li>Tus frases y recordatorios se guardan en tu teléfono.</li>
+                <li>Solo salen del teléfono si activas el respaldo.</li>
+                <li>Con el respaldo activo se guardan en el servidor tus recordatorios, identificados únicamente por tu código. El servidor no guarda el código, solo su huella.</li>
+                <li>"Borrar mis datos" elimina todo lo tuyo del servidor y desactiva el respaldo. Los recordatorios de este teléfono se quedan.</li>
+                <li>No pedimos correo, contraseña ni ningún dato personal.</li>
+            </ul>
+        </section>
+    </div>
+</section>
+
+@if (_confirmandoBorrar)
+{
+    <div class="hoja-fondo" @onclick="CancelarBorrar"></div>
+    <div class="dialogo" role="alertdialog">
+        <p>¿Borrar tus datos del servidor?</p>
+        <p class="dialogo-detalle">Se elimina el respaldo y tu código deja de funcionar. Tus recordatorios de este teléfono se quedan.</p>
+        <div class="hoja-pie">
+            <button type="button" class="boton-secundario" disabled="@_ocupado" @onclick="CancelarBorrar">Cancelar</button>
+            <button type="button" class="boton-peligro" disabled="@_ocupado" @onclick="BorrarAsync">Confirmar</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback OnCerrar { get; set; }
+
+    /// <summary>Se recuperaron recordatorios: la lista tiene que recargarse.</summary>
+    [Parameter] public EventCallback OnDatosCambiaron { get; set; }
+
+    private bool _ocupado;
+    private bool _recuperando;
+    private bool _confirmandoBorrar;
+    private string _codigoEscrito = "";
+    private string _direccion = "";
+    private string? _mensaje;
+    private bool _mensajeEsError;
+    private string? _mensajeServidor;
+    private bool _mensajeServidorEsError;
+
+    protected override void OnInitialized() => _direccion = Servidor.Direccion;
+
+    private async Task ActivarAsync()
+    {
+        await EjecutarAsync(async () =>
+        {
+            var resultado = await Respaldo.ActivarAsync();
+            if (resultado == ResultadoRed.Ok)
+                Avisar("Respaldo activado. Guarda tu código.", error: false);
+            else
+                Avisar(Texto(resultado), error: true);
+        });
+    }
+
+    private void EmpezarRecuperar()
+    {
+        _mensaje = null;
+        _recuperando = true;
+    }
+
+    private void CancelarRecuperar()
+    {
+        _recuperando = false;
+        _codigoEscrito = "";
+        _mensaje = null;
+    }
+
+    private async Task RecuperarAsync()
+    {
+        await EjecutarAsync(async () =>
+        {
+            var resultado = await Respaldo.RecuperarAsync(_codigoEscrito);
+            if (resultado != ResultadoRed.Ok)
+            {
+                Avisar(Texto(resultado), error: true);
+                return;
+            }
+
+            _recuperando = false;
+            _codigoEscrito = "";
+            Avisar("Listo, recuperé tus recordatorios.", error: false);
+            await OnDatosCambiaron.InvokeAsync();
+        });
+    }
+
+    private async Task SincronizarAsync()
+    {
+        await EjecutarAsync(async () =>
+        {
+            var resultado = await Respaldo.SincronizarAsync();
+            if (!resultado.Ok)
+            {
+                Avisar(Texto(resultado.Resultado), error: true);
+                return;
+            }
+
+            Avisar("Todo al día.", error: false);
+            if (resultado.Recibidos > 0) await OnDatosCambiaron.InvokeAsync();
+        });
+    }
+
+    private void PedirBorrar() => _confirmandoBorrar = true;
+
+    private void CancelarBorrar() => _confirmandoBorrar = false;
+
+    private async Task BorrarAsync()
+    {
+        await EjecutarAsync(async () =>
+        {
+            var resultado = await Respaldo.BorrarMisDatosAsync();
+            _confirmandoBorrar = false;
+
+            if (resultado == ResultadoRed.Ok)
+                Avisar("Tus datos fueron eliminados", error: false);
+            else
+                Avisar(Texto(resultado), error: true);
+        });
+    }
+
+    private void GuardarDireccion()
+    {
+        if (Servidor.Establecer(_direccion))
+        {
+            _direccion = Servidor.Direccion;
+            _mensajeServidor = _direccion.Length == 0 ? "Dirección quitada." : "Dirección guardada.";
+            _mensajeServidorEsError = false;
+        }
+        else
+        {
+            _mensajeServidor = "Esa dirección no es válida. Debe empezar con https://";
+            _mensajeServidorEsError = true;
+        }
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        if (_ocupado) return;
+
+        _ocupado = true;
+        _mensaje = null;
+        try
+        {
+            await accion();
+        }
+        finally
+        {
+            _ocupado = false;
+        }
+    }
+
+    private void Avisar(string mensaje, bool error)
+    {
+        _mensaje = mensaje;
+        _mensajeEsError = error;
+    }
+
+    private static string Texto(ResultadoRed resultado) => resultado switch
+    {
+        ResultadoRed.SinConexion => "No hay conexión. Inténtalo de nuevo cuando tengas internet.",
+        ResultadoRed.SinServidor => "Falta la dirección del servidor. Escríbela más abajo, en Servidor.",
+        ResultadoRed.CodigoInvalido => "Ese código no existe. Revísalo e inténtalo otra vez.",
+        ResultadoRed.FormatoInvalido => "El código tiene 16 letras y números, por ejemplo ABCD-EFGH-JKMN-PQRS.",
+        ResultadoRed.LimiteExcedido => "Demasiados intentos seguidos. Espera un momento.",
+        _ => "El servidor no pudo responder. Inténtalo más tarde.",
+    };
+}

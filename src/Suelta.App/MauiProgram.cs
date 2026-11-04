@@ -5,6 +5,7 @@ using Suelta.App.Avisos;
 using Suelta.App.Servicios;
 using Suelta.Core.Avisos;
 using Suelta.Core.Datos;
+using Suelta.Core.Respaldo;
 using Suelta.Core.Servicios;
 
 namespace Suelta.App;
@@ -36,6 +37,13 @@ public static class MauiProgram
 			new RecordatorioRepositorio(Path.Combine(FileSystem.AppDataDirectory, "suelta.db3")));
 		builder.Services.AddSingleton<IProgramadorAvisos>(_ => new ProgramadorAvisosAndroid(Android.App.Application.Context));
 		builder.Services.AddSingleton<ServicioRecordatorios>();
+
+		// Respaldo opcional (HU-26): nada sale del teléfono mientras no se active.
+		builder.Services.AddSingleton(new HttpClient { Timeout = TimeSpan.FromSeconds(20) });
+		builder.Services.AddSingleton<ConfiguracionServidor>();
+		builder.Services.AddSingleton<IAlmacenRespaldo, AlmacenRespaldoApp>();
+		builder.Services.AddSingleton<ClienteRespaldo>();
+		builder.Services.AddSingleton<ServicioRespaldo>();
 
 #if DEBUG
 		builder.Services.AddBlazorWebViewDeveloperTools();

@@ -6,13 +6,19 @@
 @inject EstadoApp Estado
 @inject IJSRuntime JS
 @inject RegistroErrores Registro
+@inject ServicioRespaldo Respaldo
 
-@if (Pendiente is null)
+@if (_ajustes)
+{
+    <Ajustes OnCerrar="CerrarPantallaAjustes" OnDatosCambiaron="AlCambiarDatosAsync" />
+}
+else if (Pendiente is null)
 {
     <section class="pantalla principal">
         <header class="cabecera">
             <h1 class="logo logo-chico">Suelta<span class="punto">.</span></h1>
             <span class="fecha">@FormatoFechas.Cabecera(_ahora)</span>
+            <button type="button" class="boton-icono" aria-label="Ajustes" @onclick="AbrirPantallaAjustes">@((MarkupString)Iconos.Ajustes)</button>
         </header>
 
         @if (!_cargado)
@@ -278,6 +284,7 @@ else
     private bool _guardando;
     private bool _avisoAjustes;
     private bool _avisoAlarmas;
+    private bool _ajustes;
     private Guid? _abrirId;
     private Guid? _desplazarA;
     private string _texto = "";
@@ -371,7 +378,35 @@ else
         StateHasChanged();
     });
 
-    private async Task RecargarAsync()
+    private void AbrirPantallaAjustes() => _ajustes = true;
+
+    private void CerrarPantallaAjustes() => _ajustes = false;
+
+    // Se recuperaron o sincronizaron recordatorios desde Ajustes.
+    private async Task AlCambiarDatosAsync() => await RecargarAsync(sincronizar: false);
+
+    // Con el respaldo activo, cada cambio se envía en segundo plano. Sin red no pasa nada: se envía después.
+    private async Task SincronizarEnSegundoPlanoAsync()
+    {
+        try
+        {
+            var resultado = await Respaldo.SincronizarAsync();
+            if (resultado.Ok && resultado.Recibidos > 0)
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RecargarAsync(sincronizar: false);
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (Exception e)
+        {
+            Registro.Error("Sincronizar", e);
+        }
+    }
+
+    private async Task RecargarAsync(bool sincronizar = true)
     {
         _ahora = ZonaLima.Ahora();
         _todos = await Recordatorios.ListarAsync();
@@ -383,6 +418,9 @@ else
             _filtro = null;
 
         _cargado = true;
+
+        if (sincronizar && Respaldo.Activo)
+            _ = SincronizarEnSegundoPlanoAsync();
     }
 
     // ---- pestañas y filtros ----

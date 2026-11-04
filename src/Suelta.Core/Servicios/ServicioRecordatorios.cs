@@ -16,6 +16,18 @@ public interface IRecordatorioRepositorio
 
     /// <summary>Todos los recordatorios que no están eliminados.</summary>
     Task<List<Recordatorio>> ListarAsync();
+
+    /// <summary>
+    /// Lo que cambió desde esa fecha, incluidos los eliminados (hay que avisar al servidor que ya no existen).
+    /// Con null devuelve todo.
+    /// </summary>
+    Task<List<Recordatorio>> ListarCambiosDesdeAsync(DateTime? desdeHoraLima);
+
+    /// <summary>Un recordatorio por su id aunque esté eliminado, o null si no existe.</summary>
+    Task<Recordatorio?> ObtenerConEliminadosAsync(Guid id);
+
+    /// <summary>Inserta o reemplaza un recordatorio que llegó del respaldo.</summary>
+    Task GuardarRemotoAsync(Recordatorio recordatorio);
 }
 
 public sealed class ServicioRecordatorios(IRecordatorioRepositorio repositorio, IProgramadorAvisos? avisos = null)
@@ -138,6 +150,13 @@ public sealed class ServicioRecordatorios(IRecordatorioRepositorio repositorio, 
     {
         foreach (var r in await repositorio.ListarAsync())
             Reprogramar(r, ahora);
+    }
+
+    /// <summary>Aplica un cambio que llegó del respaldo y deja sus avisos al día.</summary>
+    public async Task AplicarRemotoAsync(Recordatorio r, DateTime ahora)
+    {
+        await repositorio.GuardarRemotoAsync(r);
+        Reprogramar(r, ahora);
     }
 
     private void Reprogramar(Recordatorio r, DateTime ahora)

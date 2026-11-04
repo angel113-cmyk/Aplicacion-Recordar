@@ -62,22 +62,28 @@ Historias técnicas: HT-06 (avisos locales), HT-14 (pruebas de repeticiones y ma
 
 Total: 13 pts de HU.
 
-## Sprint 4: Respaldo y frases difíciles
+## Sprint 4: Respaldo
 
-Objetivo: cambiar de teléfono sin perder nada y entender frases que el parser local no resuelve.
+Objetivo: cambiar de teléfono sin perder nada.
+
+Decisiones del equipo para este sprint:
+
+- La base de datos del servidor es **SQLite** con EF Core, no PostgreSQL (HT-10 cambia de motor; la API sigue siendo ASP.NET Core).
+- **HU-27 y HT-12 (interpretación avanzada con Claude) se aplazan**: el parser local resuelve las frases del documento y la clave de Claude solo puede vivir en un servidor.
 
 | ID | Historia | Prioridad | Pts |
 |----|----------|-----------|-----|
 | HU-26 | Respaldar mis recordatorios y recuperarlos en otro teléfono | Media | 5 |
-| HU-27 | Entender frases difíciles con interpretación avanzada | Baja | 5 |
 
-Historias técnicas: HT-09 (API ASP.NET Core), HT-10 (PostgreSQL con EF Core), HT-11 (sincronización offline primero), HT-12 (interpretación con Claude), HT-13 (privacidad), HT-14 (integración contra PostgreSQL), HT-18 (despliegue).
+Historias técnicas: HT-09 (API ASP.NET Core con identidad anónima por código y límite de peticiones), HT-10 (esquema en SQLite con migraciones), HT-11 (sincronización offline primero, gana la última modificación), HT-13 (privacidad: pantalla de Ajustes, "Borrar mis datos" y política), HT-14 (pruebas de integración de la API contra SQLite real), HT-18 (Dockerfile, copia diaria de la base y guía de despliegue).
 
-Total: 10 pts de HU.
+Total: 5 pts de HU.
+
+Aplazado: HU-27 (5 pts) y HT-12.
 
 ## Cobertura
 
-27 de 27 HU y 18 de 18 HT asignadas.
+26 de 27 HU y 17 de 18 HT hechas. Aplazadas: HU-27 y HT-12.
 
 ## Puntos abiertos que afectan los sprints
 
