@@ -51,6 +51,12 @@ public static class FormatoFechas
     public static string Cabecera(DateTime ahora) =>
         $"{DiasLargos[(int)ahora.DayOfWeek]} {ahora.Day} de {MesesLargos[ahora.Month - 1]}";
 
+    /// <summary>"jueves".</summary>
+    public static string DiaSemana(DateTime fecha) => DiasLargos[(int)fecha.DayOfWeek].ToLowerInvariant();
+
+    /// <summary>"5 nov".</summary>
+    public static string DiaMesCorto(DateTime fecha) => $"{fecha.Day} {MesesCortos[fecha.Month - 1]}";
+
     /// <summary>"jueves 5 de noviembre".</summary>
     public static string FechaLarga(DateTime fecha) =>
         $"{DiasLargos[(int)fecha.DayOfWeek].ToLowerInvariant()} {fecha.Day} de {MesesLargos[fecha.Month - 1]}";

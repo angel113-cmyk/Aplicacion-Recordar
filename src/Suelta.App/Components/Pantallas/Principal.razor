@@ -12,44 +12,230 @@
 {
     <Ajustes OnCerrar="CerrarPantallaAjustes" OnDatosCambiaron="AlCambiarDatosAsync" />
 }
-else if (Pendiente is null)
+else if (Pendiente is not null)
 {
-    <section class="pantalla principal">
-        <header class="cabecera">
-            <h1 class="logo logo-chico">Suelta<span class="punto">.</span></h1>
-            <span class="fecha">@FormatoFechas.Cabecera(_ahora)</span>
-            <button type="button" class="boton-icono" aria-label="Ajustes" @onclick="AbrirPantallaAjustes">@((MarkupString)Iconos.Ajustes)</button>
+    @* ---------- PREGUNTA: falta un dato (HU-12, HU-13, HU-14) ---------- *@
+    var pendiente = Pendiente;
+    var info = CategoriaInfo.De(pendiente.Categoria);
+    var repeticion = FormatoFechas.EtiquetaRepeticion(new Recordatorio { Repeticion = pendiente.Repeticion });
+    var faltaDia = pendiente.Faltan.Contains(DatoFaltante.Dia);
+    var primeroFalta = pendiente.Faltan[0];
+
+    <section class="pantalla profunda pregunta-pantalla">
+        <div class="pregunta-cuerpo">
+            <div class="dijiste vidrio">Dijiste: @Resaltado(pendiente.Dijiste)</div>
+
+            <h1 class="titular">@pendiente.Pregunta</h1>
+            <p class="subtitular">@(primeroFalta == DatoFaltante.Dia ? "Solo me falta eso. No invento fechas." : "Con una palabra no sé qué guardar.")</p>
+
+            <div class="vista-previa vidrio">
+                <span class="icono-tema" style="background:@info.Color">@((MarkupString)Iconos.Svg(info.Icono, 22))</span>
+                <div class="vista-previa-texto">
+                    <b>@(pendiente.Titulo.Length > 0 ? pendiente.Titulo : "…")</b>
+                    @if (repeticion.Length > 0 || faltaDia)
+                    {
+                        <span class="chips">
+                            @if (repeticion.Length > 0)
+                            {
+                                <span class="chip">@repeticion</span>
+                            }
+                            @if (faltaDia)
+                            {
+                                <span class="chip chip-falta">Falta el día</span>
+                            }
+                        </span>
+                    }
+                </div>
+            </div>
+
+            @if (pendiente.Opciones is { Count: > 0 } && !_modoOtro)
+            {
+                <div class="opciones">
+                    @foreach (var opcion in pendiente.Opciones)
+                    {
+                        <button type="button" class="opcion vidrio" @onclick="() => ElegirOpcionAsync(opcion)">@opcion.Etiqueta</button>
+                    }
+                </div>
+            }
+
+            @if (primeroFalta == DatoFaltante.Dia)
+            {
+                <div class="opciones">
+                    @foreach (var (etiqueta, detalle, fecha) in DiasRapidos())
+                    {
+                        <button type="button" class="opcion vidrio" @onclick="() => ElegirDiaAsync(fecha)">@etiqueta<small>@detalle</small></button>
+                    }
+                    <label class="opcion vidrio opcion-calendario">
+                        <span>Otro día<small>elegir</small></span>
+                        <input type="date" min="@HoyIso" aria-label="Elegir el día" @onchange="AlElegirFechaAsync" />
+                    </label>
+                </div>
+            }
+
+            <div class="pregunta-mic">
+                <BotonMicrofono Clase="orbe-chico" Tamano="40" Escuchando="_escuchando"
+                                OnToque="AlTocarMicrofonoAsync" OnMantener="AlMantenerMicrofonoAsync" OnSoltar="AlSoltarMicrofonoAsync" />
+                <p>@(_escuchando ? "Te escucho..." : "Dilo con tu voz")</p>
+            </div>
+
+            @if (_mensaje is not null && !_hojaAbierta)
+            {
+                <p class="mensaje-claro">@_mensaje</p>
+            }
+        </div>
+
+        <button type="button" class="omitir" @onclick="OmitirPendiente">@(_lote.Count > 1 ? "No guardar este" : "Cancelar")</button>
+    </section>
+}
+else if (_mostrandoResultado)
+{
+    @* ---------- RESULTADO: "Listo. Ya lo soltaste." (HU-24) ---------- *@
+    <section class="pantalla profunda resultado">
+        <div class="resultado-cima">
+            <div class="insignia">@((MarkupString)Iconos.Svg("check", 28))</div>
+            <h1 class="titular">@(_ultimosGuardados.Count > 1 ? $"Listo. {_ultimosGuardados.Count} cosas en su lugar." : "Listo. Ya lo soltaste.")</h1>
+            <p class="subtitular">Guardado. Ya no tienes que acordarte</p>
+        </div>
+
+        <div class="resultado-tarjetas">
+            @for (var i = 0; i < _ultimosGuardados.Count; i++)
+            {
+                var guardado = _ultimosGuardados[i];
+                var tema = CategoriaInfo.De(guardado.Categoria);
+                var nota = NotaDeAviso(guardado);
+                <div class="resultado-tarjeta" style="animation-delay:@((i * 0.18).ToString("0.##", CultureInfo.InvariantCulture))s">
+                    <div class="resultado-fila">
+                        <span class="icono-tema" style="background:@tema.Color">@((MarkupString)Iconos.Svg(tema.Icono, 22))</span>
+                        <div class="fila-texto">
+                            <b>@guardado.Titulo</b>
+                            <span>@FormatoFechas.Cuando(guardado, _ahora)</span>
+                        </div>
+                    </div>
+                    <button type="button" class="pildora-tema" style="background:@tema.Color" @onclick="() => AlternarCambioDeTema(guardado.Id)">
+                        @((MarkupString)Iconos.Svg(tema.Icono, 15))@tema.Nombre · cambiar
+                    </button>
+                    @if (_cambiandoTema.Contains(guardado.Id))
+                    {
+                        <div class="selector-tema">
+                            @foreach (var otro in CategoriaInfo.Lista)
+                            {
+                                <button type="button" style="background:@otro.Color" @onclick="() => CambiarTemaAsync(guardado, otro.Categoria)">@otro.Nombre</button>
+                            }
+                        </div>
+                    }
+                    @if (nota.Length > 0)
+                    {
+                        <p class="nota">@nota</p>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="resultado-acciones">
+            <button type="button" class="boton-vidrio-ancho vidrio" @onclick="DeshacerAsync">@((MarkupString)Iconos.Svg("undo", 20))Deshacer</button>
+            <button type="button" class="boton-blanco" @onclick="VerRecordatorios">Ver recordatorios</button>
+        </div>
+    </section>
+}
+else if (_vista == Vista.Hablar)
+{
+    @* ---------- HABLAR: el orbe (HU-01, HU-03, HU-04, HU-05, HU-06) ---------- *@
+    <section class="pantalla hero inicio habla-@_habla.ToString().ToLowerInvariant()">
+        <header class="cima">
+            <div class="marca">Suelta<small>@Saludo</small></div>
+            <button type="button" class="boton-vidrio vidrio" aria-label="Ajustes" @onclick="AbrirPantallaAjustes">@((MarkupString)Iconos.Svg("settings", 22))</button>
         </header>
 
-        @if (!_cargado)
-        {
-            <div class="vacio"></div>
-        }
-        else if (_todos.Count == 0)
-        {
-            <div class="vacio">
-                <h2 class="titulo-grande">Tu cabeza<br />está libre.</h2>
-
-                <BotonMicrofono Clase="mic-grande" Escuchando="_escuchando"
-                                OnToque="AlTocarMicrofonoAsync" OnMantener="AlMantenerMicrofonoAsync" OnSoltar="AlSoltarMicrofonoAsync" />
-                <p class="ayuda-mic">Mantén apretado y habla</p>
-
-                <button type="button" class="ejemplo" @onclick="ProbarEjemplo">
-                    <span class="ejemplo-rotulo">Prueba diciendo</span>
-                    <span class="ejemplo-frase">“@Ejemplo”</span>
-                </button>
+        <div class="escenario">
+            <div class="halo"></div>
+            <div class="anillo"></div><div class="anillo"></div><div class="anillo"></div>
+            <BotonMicrofono Clase="orbe-grande" Escuchando="_escuchando"
+                            OnToque="AlTocarMicrofonoAsync" OnMantener="AlMantenerMicrofonoAsync" OnSoltar="AlSoltarMicrofonoAsync" />
+            <div class="puntos" aria-hidden="true">
+                @for (var i = 0; i < 14; i++)
+                {
+                    <span class="punto-suelto" style="--a:@(i * 360 / 14)deg;--d:@(120 + (i % 3) * 30)px"></span>
+                }
             </div>
-        }
-        else
-        {
-            <nav class="pestanas" role="tablist">
-                <button type="button" role="tab" aria-selected="@(_vista == Vista.Proximos)"
-                        class="pestana @(_vista == Vista.Proximos ? "activa" : "")" @onclick="VerProximos">Próximos</button>
-                <button type="button" role="tab" aria-selected="@(_vista == Vista.PorCategoria)"
-                        class="pestana @(_vista == Vista.PorCategoria ? "activa" : "")" @onclick="VerPorCategoria">Por categoría</button>
-            </nav>
+        </div>
 
-            @if (_vista == Vista.Proximos)
+        <div class="decir">
+            @if (_habla == Habla.Reposo)
+            {
+                <h1 class="titular-hero">Mantén apretado<br />y suelta lo que<br />no quieres olvidar</h1>
+                <p class="subtitular">Tú lo dices, ella se acuerda.</p>
+
+                @if (_mensaje is not null)
+                {
+                    <p class="mensaje-claro">@_mensaje</p>
+                }
+
+                <button type="button" class="escribir vidrio" @onclick="AbrirHojaParaEscribir">@((MarkupString)Iconos.Svg("pen", 18))o escríbelo</button>
+
+                @if (_cargado && _todos.Count == 0)
+                {
+                    <button type="button" class="ejemplo-ficha vidrio" @onclick="ProbarEjemplo">
+                        <small>Prueba diciendo</small>
+                        “@Ejemplo”
+                    </button>
+                }
+            }
+            else
+            {
+                <div class="transcripcion">
+                    @if (_texto.Length == 0)
+                    {
+                        <span class="ph">Dime qué no quieres olvidar…</span>
+                    }
+                    else
+                    {
+                        @Resaltado(_texto)
+                    }
+                </div>
+
+                @if (_habla == Habla.Escuchando)
+                {
+                    <p class="pie-escucha">Te escucho… suelta cuando termines</p>
+                }
+                else if (_habla == Habla.Soltando)
+                {
+                    <p class="pie-escucha">Ya lo soltaste. Yo me acuerdo.</p>
+                }
+                else
+                {
+                    <p class="pie-escucha">¿Está bien así?</p>
+                    <div class="revision-acciones">
+                        <button type="button" class="boton-vidrio-ancho vidrio" @onclick="AbrirHojaParaEscribir">@((MarkupString)Iconos.Svg("pen", 18))Corregir</button>
+                        <button type="button" class="boton-blanco" disabled="@_guardando" @onclick="GuardarRevisionAsync">Guardar</button>
+                    </div>
+                    <button type="button" class="omitir" @onclick="DescartarRevision">Descartar</button>
+                }
+            }
+        </div>
+    </section>
+}
+else if (_vista == Vista.Proximos)
+{
+    @* ---------- PRÓXIMOS (HU-15, HU-16) ---------- *@
+    <section class="pantalla clara">
+        <header class="encabezado">
+            <h2>Próximos</h2>
+            <p>@SubtituloProximos</p>
+        </header>
+
+        <div class="desplazable">
+            @if (_cargado && _todos.Count == 0)
+            {
+                <div class="vacio">
+                    <b>Tu cabeza está libre.</b>
+                    Mantén apretado el botón y suelta algo.
+                    <button type="button" class="ejemplo-claro" @onclick="ProbarEjemplo">
+                        <small>Prueba diciendo</small>
+                        “@Ejemplo”
+                    </button>
+                </div>
+            }
+            else
             {
                 @if (!_resumen.EstaVacio)
                 {
@@ -69,134 +255,89 @@ else if (Pendiente is null)
                     </div>
                 }
 
-                <div class="lista">
-                    @foreach (var grupo in _grupos)
+                @foreach (var grupo in _grupos)
+                {
+                    <div class="grupo"><span>@grupo.Titulo</span><span>@grupo.Items.Count</span></div>
+                    @foreach (var recordatorio in grupo.Items)
                     {
-                        <h2 class="grupo-titulo">@grupo.Titulo</h2>
-                        @foreach (var recordatorio in grupo.Items)
-                        {
-                            <TarjetaRecordatorio @key="recordatorio.Id" Recordatorio="recordatorio" Ahora="_ahora" Expandida="@(recordatorio.Id == _abrirId)"
-                                                 OnHecho="AlternarHechoAsync" OnEditar="Editar" OnEliminar="PedirEliminar" />
-                        }
+                        @Fila(recordatorio)
                     }
-                </div>
+                }
+            }
+        </div>
+    </section>
+}
+else if (_vista == Vista.Temas)
+{
+    @* ---------- POR CATEGORÍA (HU-17) ---------- *@
+    <section class="pantalla clara">
+        <header class="encabezado">
+            <h2>Por categoría</h2>
+            <p>Todo en su lugar, sin que lo ordenes.</p>
+        </header>
+
+        <div class="desplazable">
+            @if (_conteos.Count == 0)
+            {
+                <div class="vacio"><b>Nada por ahora.</b>Cuando algo encaje en un tema, aparece solo.</div>
             }
             else
             {
-                <div class="categorias">
+                <div class="baldosas">
                     @foreach (var c in _conteos)
                     {
-                        <button type="button" class="chip-cat @(_filtro == c.Info.Categoria ? "seleccionada" : "")"
-                                style="--cat:@c.Info.Color" @onclick="() => FiltrarCategoria(c.Info.Categoria)">
-                            <span class="chip-cat-icono" style="background:@c.Info.Color">@c.Info.Icono</span>
-                            @c.Info.Nombre <b>@c.Cantidad</b>
+                        <button type="button" class="baldosa" style="background:@c.Info.Color" @onclick="() => AbrirTema(c.Info.Categoria)">
+                            @((MarkupString)Iconos.Svg(c.Info.Icono, 28))
+                            <div>
+                                <b>@c.Info.Nombre</b>
+                                <span>@c.Cantidad @(c.Cantidad == 1 ? "pendiente" : "pendientes")@ProximoDe(c.Info.Categoria)</span>
+                            </div>
                         </button>
                     }
                 </div>
-
-                <div class="lista">
-                    @foreach (var c in _conteos.Where(c => _filtro is null || _filtro == c.Info.Categoria))
-                    {
-                        <h2 class="grupo-titulo" style="color:@c.Info.Color">@c.Info.Icono @c.Info.Nombre @c.Cantidad</h2>
-                        @foreach (var recordatorio in AgrupadorCategorias.Filtrar(_todos, c.Info.Categoria))
-                        {
-                            <TarjetaRecordatorio @key="recordatorio.Id" Recordatorio="recordatorio" Ahora="_ahora"
-                                                 OnHecho="AlternarHechoAsync" OnEditar="Editar" OnEliminar="PedirEliminar" />
-                        }
-                    }
-                </div>
             }
-
-            <div class="mic-flotante">
-                <BotonMicrofono Escuchando="_escuchando"
-                                OnToque="AlTocarMicrofonoAsync" OnMantener="AlMantenerMicrofonoAsync" OnSoltar="AlSoltarMicrofonoAsync" />
-                <p class="ayuda-mic">Mantén apretado y habla</p>
-            </div>
-        }
+        </div>
     </section>
 }
 else
 {
-    var pendiente = Pendiente;
-    var info = CategoriaInfo.De(pendiente.Categoria);
-    var repeticion = FormatoFechas.EtiquetaRepeticion(new Recordatorio { Repeticion = pendiente.Repeticion });
-    var faltaDia = pendiente.Faltan.Contains(DatoFaltante.Dia);
-    var primeroFalta = pendiente.Faltan[0];
+    @* ---------- UN TEMA (HU-17) ---------- *@
+    var tema = CategoriaInfo.De(_filtro ?? Categoria.Otro);
+    var delTema = AgrupadorCategorias.Filtrar(_todos, _filtro);
 
-    <section class="pantalla pregunta">
-        <p class="logo logo-chico">Suelta<span class="punto">.</span></p>
+    <section class="pantalla clara">
+        <header class="encabezado encabezado-tema" style="background:@tema.Color">
+            <button type="button" class="volver" @onclick="VerTemas">@((MarkupString)Iconos.Svg("back", 18))Por categoría</button>
+            <h2>@tema.Nombre</h2>
+            <p>@delTema.Count @(delTema.Count == 1 ? "cosa pendiente" : "cosas pendientes")</p>
+        </header>
 
-        <p class="rotulo">Dijiste</p>
-        <p class="burbuja">“@pendiente.Dijiste”</p>
-        <p class="entendi"><span>Entendí esto</span></p>
-
-        <div class="tarjeta tarjeta-entendida">
-            <span class="tarjeta-icono" style="background:@info.Color">@info.Icono</span>
-            <div class="tarjeta-cuerpo">
-                <strong class="tarjeta-titulo">@(pendiente.Titulo.Length > 0 ? pendiente.Titulo : "…")</strong>
-                <span class="chips">
-                    @if (repeticion.Length > 0)
-                    {
-                        <span class="chip chip-dato" style="color:@info.Color">@repeticion</span>
-                    }
-                    @if (faltaDia)
-                    {
-                        <span class="chip chip-falta">Falta el día</span>
-                    }
-                </span>
-            </div>
+        <div class="desplazable">
+            @foreach (var recordatorio in delTema)
+            {
+                @Fila(recordatorio)
+            }
         </div>
-
-        <h2 class="pregunta-texto">@pendiente.Pregunta</h2>
-
-        @if (pendiente.Opciones is { Count: > 0 } && !_modoOtro)
-        {
-            <div class="opciones">
-                @foreach (var opcion in pendiente.Opciones)
-                {
-                    <button type="button" class="opcion" @onclick="() => ElegirOpcionAsync(opcion)">@opcion.Etiqueta</button>
-                }
-            </div>
-        }
-
-        <BotonMicrofono Clase="mic-grande" Escuchando="_escuchando"
-                        OnToque="AlTocarMicrofonoAsync" OnMantener="AlMantenerMicrofonoAsync" OnSoltar="AlSoltarMicrofonoAsync" />
-        <p class="ayuda-mic">@(_escuchando ? "Te escucho..." : "Dilo con tu voz")</p>
-
-        @if (_mensaje is not null && !_hojaAbierta)
-        {
-            <p class="mensaje">@_mensaje</p>
-        }
-
-        @if (primeroFalta == DatoFaltante.Dia)
-        {
-            <label class="boton-calendario">
-                <span>@((MarkupString)Iconos.Calendario) Elegir en el calendario</span>
-                <input type="date" min="@HoyIso" @onchange="AlElegirFechaAsync" />
-            </label>
-        }
-
-        <button type="button" class="boton-texto" @onclick="CancelarPregunta">Cancelar</button>
     </section>
+}
+
+@if (MostrarNavegacion)
+{
+    <nav class="nav @(_vista == Vista.Hablar ? "sobre-hero vidrio" : "sobre-clara")" aria-label="Secciones">
+        <button type="button" class="@(_vista == Vista.Hablar ? "activo" : "")" @onclick="VerHablar">@((MarkupString)Iconos.Svg("mic", 24))Hablar</button>
+        <button type="button" class="@(_vista == Vista.Proximos ? "activo" : "")" @onclick="VerProximos">@((MarkupString)Iconos.Svg("list", 24))Próximos</button>
+        <button type="button" class="@(_vista is Vista.Temas or Vista.Tema ? "activo" : "")" @onclick="VerTemas">@((MarkupString)Iconos.Svg("grid", 24))Por categoría</button>
+    </nav>
 }
 
 @if (_hojaAbierta)
 {
     <div class="hoja-fondo" @onclick="CerrarHoja"></div>
-    <div class="hoja" role="dialog" aria-label="Crear recordatorio">
-        <div class="hoja-cabecera">
-            <span class="mic-mini @(_escuchando ? "escuchando" : "")">@((MarkupString)Iconos.Microfono)</span>
-            <div class="hoja-textos">
-                <strong>@(_escuchando ? "Te escucho..." : Pendiente is null ? "Escribe tu recordatorio" : Pendiente.Pregunta)</strong>
-                <small>Dilo como te salga. Aquí puedes usar el micrófono de tu teclado o escribir.</small>
-            </div>
-            @if (_escuchando)
-            {
-                <span class="onda" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-            }
-        </div>
+    <div class="hoja" role="dialog" aria-label="Escribir un recordatorio">
+        <div class="agarre"></div>
+        <h3>@(Pendiente is null ? "Escríbelo como lo dirías" : Pendiente.Pregunta)</h3>
 
-        <textarea @ref="_campo" class="campo" rows="3" placeholder="Ej: mañana pagar el recibo a las 5"
+        <textarea @ref="_campo" class="campo" rows="3" placeholder="Ej: mañana a las 8 pastilla y el sábado reparar el auto"
                   @bind="_texto" @bind:event="oninput"></textarea>
 
         @if (_mensaje is not null)
@@ -255,17 +396,14 @@ else
 
 @if (_toast is not null)
 {
-    <div class="toast" role="status">
-        <span>@_toast</span>
-        @if (_toastConDeshacer)
-        {
-            <button type="button" class="toast-accion" @onclick="DeshacerAsync">Deshacer</button>
-        }
-    </div>
+    <div class="toast" role="status">@_toast</div>
 }
 
 @code {
-    private enum Vista { Proximos, PorCategoria }
+    private enum Vista { Hablar, Proximos, Temas, Tema }
+
+    /// <summary>En qué momento de hablar está la pantalla de inicio.</summary>
+    private enum Habla { Reposo, Escuchando, Soltando, Revisando }
 
     private const string Ejemplo = "El 5 de noviembre es el cumpleaños de Martín";
 
@@ -275,8 +413,9 @@ else
     private ResumenCarga _resumen = new(0, 0, 0);
     private DateTime _ahora = ZonaLima.Ahora();
     private bool _cargado;
-    private Vista _vista = Vista.Proximos;
+    private Vista _vista = Vista.Hablar;
     private Categoria? _filtro;
+    private Habla _habla = Habla.Reposo;
 
     private bool _hojaAbierta;
     private bool _enfocarCampo;
@@ -292,9 +431,12 @@ else
     private ElementReference _campo;
 
     private string? _toast;
-    private bool _toastConDeshacer;
     private int _toastId;
+
+    // Lo que se acaba de guardar: se muestra en "Listo. Ya lo soltaste." y Deshacer lo quita todo (HU-24).
     private List<Recordatorio> _ultimosGuardados = [];
+    private bool _mostrandoResultado;
+    private readonly HashSet<Guid> _cambiandoTema = [];
 
     private Recordatorio? _editando;
     private Recordatorio? _porEliminar;
@@ -306,7 +448,28 @@ else
 
     private ResultadoParser? Pendiente => _lote.FirstOrDefault(r => !r.Completo);
 
+    private bool MostrarNavegacion => !_ajustes && Pendiente is null && !_mostrandoResultado;
+
     private static string HoyIso => ZonaLima.Ahora().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    // "Hoy me acuerdo de 3 cosas por ti." o "Tu cabeza está libre."
+    private string Saludo
+    {
+        get
+        {
+            var n = _grupos.Where(g => g.Grupo is GrupoFecha.SeTePaso or GrupoFecha.Hoy).Sum(g => g.Items.Count);
+            return n == 0 ? "Tu cabeza está libre." : $"Hoy me acuerdo de {n} {(n == 1 ? "cosa" : "cosas")} por ti.";
+        }
+    }
+
+    private string SubtituloProximos
+    {
+        get
+        {
+            var n = _todos.Count(r => !r.Hecho);
+            return n == 0 ? "Nada pendiente." : $"{n} {(n == 1 ? "cosa que ya no tienes" : "cosas que ya no tienes")} que recordar tú.";
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -351,39 +514,98 @@ else
         }
     }
 
-    // ---- notificaciones ----
+    // ---- pedazos de pantalla ----
 
-    // Se tocó una notificación: se muestra la lista completa con esa tarjeta abierta (HU-20, HU-22).
-    private void AbrirRecordatorioPedido()
+    private RenderFragment Fila(Recordatorio r) =>
+        @<TarjetaRecordatorio @key="r.Id" Recordatorio="r" Ahora="_ahora" Expandida="@(r.Id == _abrirId)"
+                              OnHecho="AlternarHechoAsync" OnEditar="Editar" OnEliminar="PedirEliminar" />;
+
+    // La frase con lo que se entendió resaltado en amarillo, como en el prototipo.
+    private static RenderFragment Resaltado(string texto) => builder =>
     {
-        if (AperturaDesdeAviso.Consumir() is not { } id) return;
+        foreach (var trozo in ResaltadoFrase.Dividir(texto))
+        {
+            if (trozo.Resaltado)
+            {
+                builder.OpenElement(0, "mark");
+                builder.AddAttribute(1, "class", "resalte");
+                builder.AddContent(2, trozo.Texto);
+                builder.CloseElement();
+            }
+            else
+            {
+                builder.AddContent(3, trozo.Texto);
+            }
+        }
+    };
 
-        _vista = Vista.Proximos;
-        _filtro = null;
-        _abrirId = id;
-        _desplazarA = id;
+    private string ProximoDe(Categoria categoria)
+    {
+        var primero = AgrupadorCategorias.Filtrar(_todos, categoria).FirstOrDefault(r => r.FechaHora is not null);
+        return primero is null ? "" : " · " + FormatoFechas.Cuando(primero, _ahora).Split(" · ")[0];
     }
 
-    private void AlSolicitarApertura() => InvokeAsync(async () =>
+    private static string NotaDeAviso(Recordatorio r)
     {
-        await RecargarAsync();
-        AbrirRecordatorioPedido();
-        StateHasChanged();
-    });
+        if (r.DiasAvisoAnticipado > 0)
+        {
+            var repite = r.Repeticion == Repeticion.Anual ? " Se repite cada año." : "";
+            return $"Te aviso {r.DiasAvisoAnticipado} días antes y el mismo día.{repite}";
+        }
 
-    // Un botón de la notificación (Hecho, En 1 hora, Mañana) cambió algo mientras la app estaba abierta.
-    private void AlCambiarDesdeAfuera() => InvokeAsync(async () =>
+        return r.SinHora && r.FechaHora is not null ? "Sin hora: te aviso a las 9:00 am." : "";
+    }
+
+    // Respuestas rápidas cuando falta el día; "Otro día" abre el calendario de Android (HU-14).
+    private IEnumerable<(string Etiqueta, string Detalle, DateOnly Fecha)> DiasRapidos()
     {
-        await RecargarAsync();
-        StateHasChanged();
-    });
+        var hoy = DateOnly.FromDateTime(ZonaLima.Ahora());
+        var manana = hoy.AddDays(1);
+        yield return ("Hoy", FormatoFechas.DiaSemana(hoy.ToDateTime(TimeOnly.MinValue)), hoy);
+        yield return ("Mañana", FormatoFechas.DiaSemana(manana.ToDateTime(TimeOnly.MinValue)), manana);
+
+        var sabado = hoy.AddDays(((int)DayOfWeek.Saturday - (int)hoy.DayOfWeek + 7) % 7);
+        if (sabado > manana)
+            yield return ("Este sábado", FormatoFechas.DiaMesCorto(sabado.ToDateTime(TimeOnly.MinValue)), sabado);
+    }
+
+    // ---- navegación ----
 
     private void AbrirPantallaAjustes() => _ajustes = true;
 
     private void CerrarPantallaAjustes() => _ajustes = false;
 
+    private void VerHablar() => _vista = Vista.Hablar;
+
+    private void VerProximos()
+    {
+        _vista = Vista.Proximos;
+        _filtro = null;
+    }
+
+    private void VerTemas()
+    {
+        _vista = Vista.Temas;
+        _filtro = null;
+    }
+
+    private void AbrirTema(Categoria categoria)
+    {
+        _filtro = categoria;
+        _vista = Vista.Tema;
+    }
+
+    private void VerRecordatorios()
+    {
+        _mostrandoResultado = false;
+        _cambiandoTema.Clear();
+        _vista = Vista.Proximos;
+    }
+
     // Se recuperaron o sincronizaron recordatorios desde Ajustes.
     private async Task AlCambiarDatosAsync() => await RecargarAsync(sincronizar: false);
+
+    // ---- carga y sincronización ----
 
     // Con el respaldo activo, cada cambio se envía en segundo plano. Sin red no pasa nada: se envía después.
     private async Task SincronizarEnSegundoPlanoAsync()
@@ -414,8 +636,12 @@ else
         _conteos = AgrupadorCategorias.Contar(_todos);
         _resumen = ResumenCarga.De(_todos, _ahora);
 
+        // Si un tema se quedó sin recordatorios, se vuelve a la lista de temas.
         if (_filtro is not null && _conteos.All(c => c.Info.Categoria != _filtro))
+        {
             _filtro = null;
+            if (_vista == Vista.Tema) _vista = Vista.Temas;
+        }
 
         _cargado = true;
 
@@ -423,19 +649,35 @@ else
             _ = SincronizarEnSegundoPlanoAsync();
     }
 
-    // ---- pestañas y filtros ----
+    // ---- notificaciones ----
 
-    private void VerProximos()
+    // Se tocó una notificación: se muestra la lista completa con esa tarjeta abierta (HU-20, HU-22).
+    private void AbrirRecordatorioPedido()
     {
+        if (AperturaDesdeAviso.Consumir() is not { } id) return;
+
+        _mostrandoResultado = false;
         _vista = Vista.Proximos;
         _filtro = null;
+        _abrirId = id;
+        _desplazarA = id;
     }
 
-    private void VerPorCategoria() => _vista = Vista.PorCategoria;
+    private void AlSolicitarApertura() => InvokeAsync(async () =>
+    {
+        await RecargarAsync();
+        AbrirRecordatorioPedido();
+        StateHasChanged();
+    });
 
-    private void FiltrarCategoria(Categoria categoria) => _filtro = _filtro == categoria ? null : categoria;
+    // Un botón de la notificación (Hecho, En 1 hora, Mañana) cambió algo mientras la app estaba abierta.
+    private void AlCambiarDesdeAfuera() => InvokeAsync(async () =>
+    {
+        await RecargarAsync();
+        StateHasChanged();
+    });
 
-    // ---- botón del micrófono ----
+    // ---- el orbe ----
 
     /// <summary>Toque corto: se abre la hoja con el campo de texto y el teclado (HU-06).</summary>
     private async Task AlTocarMicrofonoAsync()
@@ -443,7 +685,7 @@ else
         if (await MostrarAvisoAjustesSiCorrespondeAsync()) return;
 
         _mensaje = null;
-        _texto = "";
+        if (Pendiente is null) _texto = "";
         AbrirHojaParaEscribir();
     }
 
@@ -466,7 +708,7 @@ else
         if (Pendiente is null)
         {
             _texto = "";
-            _hojaAbierta = true;
+            _habla = Habla.Escuchando;
         }
 
         _escuchando = true;
@@ -475,6 +717,7 @@ else
         if (!await Voz.IniciarAsync())
         {
             _escuchando = false;
+            _habla = Habla.Reposo;
             _mensaje = "No pude escuchar. Escribe tu frase.";
             AbrirHojaParaEscribir();
         }
@@ -489,6 +732,7 @@ else
 
         if (texto.Length == 0)
         {
+            _habla = Habla.Reposo;
             _texto = "";
             _mensaje = "No te escuché, intenta otra vez";
             return;
@@ -504,8 +748,13 @@ else
             return;
         }
 
-        // Frase nueva: aparece escrita para revisarla y corregirla antes de guardar (HU-05).
+        // Frase nueva: el orbe se recoge y la frase queda escrita para revisarla y corregirla (HU-05).
         _texto = texto;
+        _habla = Habla.Soltando;
+        StateHasChanged();
+
+        await Task.Delay(900);
+        _habla = Habla.Revisando;
     }
 
     private void AlLlegarTextoParcial(string texto) => InvokeAsync(() =>
@@ -533,15 +782,28 @@ else
     private void CerrarHoja()
     {
         _hojaAbierta = false;
+        _mensaje = null;
+
+        // Si se estaba corrigiendo una frase revisada, se conserva.
+        if (_habla != Habla.Revisando) _texto = "";
+    }
+
+    private void DescartarRevision()
+    {
+        _habla = Habla.Reposo;
         _texto = "";
         _mensaje = null;
     }
 
+    private async Task GuardarRevisionAsync() => await GuardarFraseAsync(_texto);
+
     // ---- guardar y preguntar ----
 
-    private async Task GuardarDesdeHojaAsync()
+    private async Task GuardarDesdeHojaAsync() => await GuardarFraseAsync(_texto);
+
+    private async Task GuardarFraseAsync(string frase)
     {
-        var texto = _texto.Trim();
+        var texto = frase.Trim();
         if (texto.Length == 0 || _guardando) return;
 
         _guardando = true;
@@ -588,16 +850,21 @@ else
         await ProcesarAsync();
     }
 
-    private async Task AlElegirFechaAsync(ChangeEventArgs e)
+    private async Task ElegirDiaAsync(DateOnly fecha)
     {
         var indice = _lote.FindIndex(r => !r.Completo);
         if (indice < 0) return;
 
+        _lote[indice] = ParserLocal.ConFecha(_lote[indice], fecha);
+        await ProcesarAsync();
+    }
+
+    private async Task AlElegirFechaAsync(ChangeEventArgs e)
+    {
         if (!DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var fecha))
             return;
 
-        _lote[indice] = ParserLocal.ConFecha(_lote[indice], fecha);
-        await ProcesarAsync();
+        await ElegirDiaAsync(fecha);
     }
 
     private async Task ProcesarAsync()
@@ -605,6 +872,7 @@ else
         _hojaAbierta = false;
         _texto = "";
         _mensaje = null;
+        _habla = Habla.Reposo;
 
         // Si todavía falta algo, se muestra la pregunta; el recordatorio todavía no se guarda.
         if (_lote.Count == 0 || Pendiente is not null) return;
@@ -612,9 +880,10 @@ else
         _ultimosGuardados = (await Recordatorios.GuardarVariosAsync(_lote, ZonaLima.Ahora())).ToList();
         _lote = [];
         _modoOtro = false;
+        _cambiandoTema.Clear();
 
         await RecargarAsync();
-        _ = MostrarToastAsync("Guardado. Ya no tienes que acordarte", conDeshacer: true);
+        _mostrandoResultado = true;
 
         // Sin el permiso de alarmas exactas Android avisaría "alrededor" de la hora.
         if (!Estado.AvisoAlarmasYaMostrado && !PermisosApp.AlarmasExactasConcedidas())
@@ -632,15 +901,56 @@ else
         PermisosApp.PedirAlarmasExactas();
     }
 
-    private void CancelarPregunta()
+    // "No guardar este": se descarta solo ese recordatorio y se guardan los demás, si ya están completos.
+    private async Task OmitirPendiente()
     {
-        _lote = [];
+        var indice = _lote.FindIndex(r => !r.Completo);
+        if (indice >= 0) _lote.RemoveAt(indice);
+
         _modoOtro = false;
         _texto = "";
         _mensaje = null;
+
+        if (_lote.Count == 0)
+        {
+            _habla = Habla.Reposo;
+            return;
+        }
+
+        await ProcesarAsync();
     }
 
-    // ---- hecho, editar, eliminar y deshacer ----
+    // ---- resultado: cambiar de tema y deshacer ----
+
+    private void AlternarCambioDeTema(Guid id)
+    {
+        if (!_cambiandoTema.Remove(id)) _cambiandoTema.Add(id);
+    }
+
+    private async Task CambiarTemaAsync(Recordatorio r, Categoria categoria)
+    {
+        r.Categoria = categoria;
+        await Recordatorios.ActualizarAsync(r, ZonaLima.Ahora());
+        _cambiandoTema.Remove(r.Id);
+
+        await RecargarAsync();
+        _ = MostrarToastAsync($"Anotado. Ahora va en {CategoriaInfo.De(categoria).Nombre}.");
+    }
+
+    /// <summary>Deshacer quita todos los recordatorios que se guardaron juntos (HU-24).</summary>
+    private async Task DeshacerAsync()
+    {
+        await Recordatorios.EliminarAsync(_ultimosGuardados, ZonaLima.Ahora());
+        _ultimosGuardados = [];
+        _mostrandoResultado = false;
+        _cambiandoTema.Clear();
+        _vista = Vista.Hablar;
+
+        await RecargarAsync();
+        _ = MostrarToastAsync("Deshecho. No guardé nada.");
+    }
+
+    // ---- hecho, editar y eliminar ----
 
     private async Task AlternarHechoAsync(Recordatorio r)
     {
@@ -681,26 +991,13 @@ else
         _ = MostrarToastAsync("Recordatorio eliminado correctamente");
     }
 
-    /// <summary>Deshacer quita todos los recordatorios que se guardaron juntos (HU-24).</summary>
-    private async Task DeshacerAsync()
-    {
-        _toastId++;
-        _toast = null;
-
-        await Recordatorios.EliminarAsync(_ultimosGuardados, ZonaLima.Ahora());
-        _ultimosGuardados = [];
-
-        await RecargarAsync();
-    }
-
-    private async Task MostrarToastAsync(string mensaje, bool conDeshacer = false)
+    private async Task MostrarToastAsync(string mensaje)
     {
         var id = ++_toastId;
         _toast = mensaje;
-        _toastConDeshacer = conDeshacer;
         await InvokeAsync(StateHasChanged);
 
-        await Task.Delay(conDeshacer ? 5000 : 3000);
+        await Task.Delay(3000);
 
         // Si apareció otro mensaje mientras tanto, ese se encarga de sí mismo.
         if (id != _toastId) return;

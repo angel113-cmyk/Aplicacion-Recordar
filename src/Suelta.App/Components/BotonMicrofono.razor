@@ -1,13 +1,12 @@
 <button type="button"
-        class="mic @(Escuchando ? "escuchando" : "") @Clase"
-        aria-label="Micrófono: toca para escribir o mantén apretado para hablar"
+        class="orbe @(Escuchando ? "escuchando" : "") @Clase"
+        aria-label="Micrófono: mantén apretado para hablar, toca para escribir"
         @onpointerdown="AlPresionarAsync"
         @onpointerup="AlLevantarAsync"
         @onpointercancel="AlLevantarAsync"
         @oncontextmenu="Nada"
         @oncontextmenu:preventDefault="true">
-    <span class="mic-halo"></span>
-    <span class="mic-centro">@((MarkupString)Iconos.Microfono)</span>
+    @((MarkupString)Iconos.Svg("mic", Tamano))
 </button>
 
 @code {
@@ -19,6 +18,9 @@
     [Parameter] public EventCallback OnSoltar { get; set; }
     [Parameter] public bool Escuchando { get; set; }
     [Parameter] public string Clase { get; set; } = "";
+
+    /// <summary>Tamaño del ícono del micrófono, en píxeles.</summary>
+    [Parameter] public int Tamano { get; set; } = 78;
 
     private CancellationTokenSource? _espera;
     private bool _mantenido;

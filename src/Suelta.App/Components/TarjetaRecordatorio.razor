@@ -4,46 +4,49 @@
     var aviso = FormatoFechas.AvisoAnticipado(Recordatorio);
 }
 
-<article id="r-@Recordatorio.Id" class="tarjeta @(_abierta ? "abierta" : "") @(Recordatorio.Hecho ? "hecha" : "")" @onclick="Alternar">
-    <span class="tarjeta-icono" style="background:@info.Color">@info.Icono</span>
+<article id="r-@Recordatorio.Id"
+         class="fila @(_abierta ? "abierta" : "") @(Recordatorio.Hecho ? "hecha" : "") @(_saliendo ? "sale" : "")"
+         @onclick="Alternar">
+    <div class="fila-principal">
+        <span class="icono-tema" style="background:@info.Color">@((MarkupString)Iconos.Svg(info.Icono, 22))</span>
 
-    <div class="tarjeta-cuerpo">
-        <strong class="tarjeta-titulo">@Recordatorio.Titulo</strong>
-        <span class="tarjeta-cuando">
-            @FormatoFechas.Cuando(Recordatorio, Ahora)
-            @if (repeticion.Length > 0)
-            {
-                <span class="tarjeta-repite" style="color:@info.Color">@repeticion</span>
-            }
-        </span>
+        <div class="fila-texto">
+            <b>@Recordatorio.Titulo</b>
+            <span>
+                @FormatoFechas.Cuando(Recordatorio, Ahora)
+                @if (repeticion.Length > 0)
+                {
+                    <em style="color:@info.Color">@repeticion</em>
+                }
+            </span>
+        </div>
 
-        @if (_abierta)
-        {
+        <button type="button"
+                class="check @(Recordatorio.Hecho ? "marcado" : "")"
+                aria-label="@(Recordatorio.Hecho ? "Devolver a próximos" : "Marcar como hecho")"
+                @onclick="MarcarAsync"
+                @onclick:stopPropagation="true">
+            @((MarkupString)Iconos.Svg("check", 18))
+        </button>
+    </div>
+
+    @if (_abierta)
+    {
+        <div class="fila-detalle">
             @if (Recordatorio.Dijiste.Length > 0)
             {
-                <span class="tarjeta-detalle"><b>Dijiste:</b> “@Recordatorio.Dijiste”</span>
+                <p><b>Dijiste:</b> “@Recordatorio.Dijiste”</p>
             }
             @if (aviso.Length > 0)
             {
-                <span class="tarjeta-detalle">@aviso</span>
+                <p>@aviso</p>
             }
-            <span class="tarjeta-acciones">
+            <div class="fila-acciones">
                 <button type="button" class="accion" @onclick="() => OnEditar.InvokeAsync(Recordatorio)" @onclick:stopPropagation="true">Editar</button>
                 <button type="button" class="accion accion-peligro" @onclick="() => OnEliminar.InvokeAsync(Recordatorio)" @onclick:stopPropagation="true">Eliminar</button>
-            </span>
-        }
-    </div>
-
-    <button type="button"
-            class="circulo @(Recordatorio.Hecho ? "marcado" : "")"
-            aria-label="@(Recordatorio.Hecho ? "Devolver a próximos" : "Marcar como hecho")"
-            @onclick="() => OnHecho.InvokeAsync(Recordatorio)"
-            @onclick:stopPropagation="true">
-        @if (Recordatorio.Hecho)
-        {
-            @((MarkupString)Iconos.Visto)
-        }
-    </button>
+            </div>
+        </div>
+    }
 </article>
 
 @code {
@@ -57,6 +60,7 @@
     [Parameter] public bool Expandida { get; set; }
 
     private bool _abierta;
+    private bool _saliendo;
 
     protected override void OnParametersSet()
     {
@@ -64,4 +68,17 @@
     }
 
     private void Alternar() => _abierta = !_abierta;
+
+    // La tarjeta se desliza hacia afuera un instante antes de pasar a "Hechos" (o a su siguiente fecha).
+    private async Task MarcarAsync()
+    {
+        if (!Recordatorio.Hecho)
+        {
+            _saliendo = true;
+            await Task.Delay(260);
+        }
+
+        await OnHecho.InvokeAsync(Recordatorio);
+        _saliendo = false;
+    }
 }
